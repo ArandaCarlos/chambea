@@ -100,7 +100,7 @@ export function JobCard({ job, showActions = true }: JobCardProps) {
             {showActions && (
                 <CardFooter className="p-4 pt-0 bg-muted/20 mt-2">
                     <Button asChild className="w-full mt-3">
-                        <Link href={`/jobs/${job.id}`}>Ver detalles</Link>
+                        <Link href={`/client/jobs/${job.id}`}>Ver detalles</Link>
                     </Button>
                 </CardFooter>
             )}

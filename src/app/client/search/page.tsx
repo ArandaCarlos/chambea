@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MapPin, Filter, SlidersHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search, MapPin, Filter, SlidersHorizontal, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,60 +25,99 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ProfessionalCard } from "@/components/professional/ProfessionalCard";
 import { JOB_CATEGORIES } from "@/lib/constants/job-categories";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock Data
-const MOCK_PROFESSIONALS = [
-    {
-        id: "1",
-        full_name: "Juan Pérez",
-        avatar_url: "https://github.com/shadcn.png",
-        trade: "plumbing",
-        // subcategories: ["leak", "installation"],
-        rating: 4.8,
-        reviews_count: 124,
-        hourly_rate: 8000,
-        location: { city: "Palermo, CABA", distance: 1.2 },
-        is_verified: true,
-        available_now: true,
-    },
-    {
-        id: "2",
-        full_name: "María Garcia",
-        avatar_url: "https://randomuser.me/api/portraits/women/44.jpg",
-        trade: "electrical",
-        rating: 5.0,
-        reviews_count: 56,
-        hourly_rate: 12000,
-        location: { city: "Belgrano, CABA", distance: 3.5 },
-        is_verified: true,
-        available_now: false,
-    },
-    {
-        id: "3",
-        full_name: "Carlos Rodriguez",
-        avatar_url: "https://randomuser.me/api/portraits/men/32.jpg",
-        trade: "gas",
-        rating: 4.5,
-        reviews_count: 89,
-        hourly_rate: 15000,
-        location: { city: "Almagro, CABA", distance: 5.0 },
-        is_verified: true,
-        available_now: true,
-    },
-] as any[];
-
+interface Professional {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    trade: string;
+    rating: number;
+    reviews_count: number;
+    hourly_rate: number;
+    location: {
+        city: string;
+        distance?: number;
+    };
+    is_verified: boolean;
+    available_now: boolean;
+}
 
 export default function SearchPage() {
+    const router = useRouter();
+    const supabase = createClient();
+    const [loading, setLoading] = useState(true);
+    const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [priceRange, setPriceRange] = useState([0, 50000]);
     const [onlyVerified, setOnlyVerified] = useState(false);
     const [availableNow, setAvailableNow] = useState(false);
 
-    // Simple client-side filtering logic (Replace with Supabase query later)
-    const filteredPros = MOCK_PROFESSIONALS.filter(pro => {
+    useEffect(() => {
+        loadProfessionals();
+    }, []);
+
+    async function loadProfessionals() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            // Get all professionals
+            const { data, error } = await supabase
+                .from('profiles')
+                .select(`
+                    id,
+                    full_name,
+                    avatar_url,
+                    city,
+                    professional_profiles (
+                        trade,
+                        hourly_rate,
+                        is_verified,
+                        available_now
+                    )
+                `)
+                .eq('user_type', 'professional');
+
+            if (error) throw error;
+
+            // Transform data
+            const transformedPros = data
+                .filter((p: any) => p.professional_profiles && p.professional_profiles.length > 0)
+                .map((p: any) => ({
+                    id: p.id,
+                    full_name: p.full_name,
+                    avatar_url: p.avatar_url,
+                    location: {
+                        city: p.city || 'CABA',
+                        distance: 0
+                    },
+                    trade: p.professional_profiles[0].trade || 'general',
+                    hourly_rate: p.professional_profiles[0].hourly_rate || 0,
+                    is_verified: p.professional_profiles[0].is_verified || false,
+                    available_now: p.professional_profiles[0].available_now || false,
+                    rating: 0, // TODO: Calculate from reviews
+                    reviews_count: 0 // TODO: Count reviews
+                }));
+
+            setProfessionals(transformedPros);
+        } catch (error) {
+            console.error("Error loading professionals:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Client-side filtering
+    const filteredPros = professionals.filter(pro => {
         // Search
-        if (searchTerm && !pro.full_name.toLowerCase().includes(searchTerm.toLowerCase()) && !pro.trade.includes(searchTerm.toLowerCase())) {
+        if (searchTerm && !pro.full_name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+            !pro.trade.includes(searchTerm.toLowerCase())) {
             return false;
         }
         // Category
@@ -155,6 +195,14 @@ export default function SearchPage() {
         </div>
     );
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
@@ -196,10 +244,6 @@ export default function SearchPage() {
                             </div>
                         </SheetContent>
                     </Sheet>
-                </div>
-
-                <div className="hidden md:block">
-                    {/* Desktop Filter View Toggle - For now just consistent layout */}
                 </div>
             </div>
 

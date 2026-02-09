@@ -1,52 +1,148 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, DollarSign, Star, TrendingUp, Search } from "lucide-react";
+import { Briefcase, DollarSign, Star, TrendingUp, Search, Loader2 } from "lucide-react";
 import { JobCard } from "@/components/job/JobCard";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock data
-const dashboardStats = {
-    activeJobs: 3,
-    pendingProposals: 5,
-    monthlyEarnings: 125000,
-    rating: 4.8,
-    profileViews: 45
-};
+interface Profile {
+    full_name: string;
+}
 
-const nearbyJobs = [
-    {
-        id: "1",
-        title: "Instalación de luminarias LED",
-        category_id: "electrical",
-        description: "Necesito cambiar 10 lámparas halógenas por paneles LED en una oficina...",
-        client: { full_name: "Empresa SA", avatar_url: "https://github.com/shadcn.png" },
-        location: { address: "Microcentro", city: "CABA", distance: 1.5 },
-        budget: 45000,
-        urgency: "medium",
-        status: "open",
-        created_at: new Date().toISOString(),
-    },
-    {
-        id: "2",
-        title: "Reparación tablero eléctrico",
-        category_id: "electrical",
-        description: "Salta la térmica cuando prendo el aire acondicionado...",
-        client: { full_name: "Ana Gomez", avatar_url: null },
-        location: { address: "San Telmo", city: "CABA", distance: 2.8 },
-        budget: 25000,
-        urgency: "high",
-        status: "open",
-        created_at: new Date().toISOString(),
-    }
-];
+interface Job {
+    id: string;
+    title: string;
+    description: string;
+    category_id: string;
+    status: string;
+    address: string;
+    city: string;
+    client_budget_max: number | null;
+    urgency: string;
+    created_at: string;
+}
 
 export default function ProfessionalDashboard() {
+    const router = useRouter();
+    const supabase = createClient();
+    const [loading, setLoading] = useState(true);
+    const [profile, setProfile] = useState<Profile | null>(null);
+    const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
+    const [stats, setStats] = useState({
+        activeJobs: 0,
+        pendingProposals: 0,
+        monthlyEarnings: 0,
+        rating: 0,
+        profileViews: 0
+    });
+
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
+
+    async function loadDashboardData() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            // Get profile
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .eq('user_id', user.id)
+                .single();
+
+            if (profileError) throw profileError;
+            setProfile(profileData);
+
+            // Get nearby open jobs (last 10)
+            const { data: jobsData, error: jobsError } = await supabase
+                .from('jobs')
+                .select('*')
+                .eq('status', 'open')
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (jobsError) throw jobsError;
+
+            const transformedJobs = jobsData.map((job: any) => ({
+                ...job,
+                client: {
+                    full_name: "Cliente",
+                    avatar_url: null,
+                },
+                location: {
+                    address: job.address,
+                    city: job.city,
+                },
+                budget: job.client_budget_max,
+            }));
+
+            setNearbyJobs(transformedJobs);
+
+            // Count my active jobs (accepted proposals)
+            const { count: activeCount } = await supabase
+                .from('proposals')
+                .select('*', { count: 'exact', head: true })
+                .eq('professional_id', profileData.id)
+                .eq('status', 'accepted');
+
+            // Count pending proposals
+            const { count: pendingCount } = await supabase
+                .from('proposals')
+                .select('*', { count: 'exact', head: true })
+                .eq('professional_id', profileData.id)
+                .eq('status', 'pending');
+
+            // Get average rating (if reviews exist)
+            const { data: ratingsData } = await supabase
+                .from('reviews')
+                .select('rating')
+                .eq('professional_id', profileData.id);
+
+            const avgRating = ratingsData && ratingsData.length > 0
+                ? ratingsData.reduce((acc, r) => acc + r.rating, 0) / ratingsData.length
+                : 0;
+
+            setStats({
+                activeJobs: activeCount || 0,
+                pendingProposals: pendingCount || 0,
+                monthlyEarnings: 0, // TODO: Calculate from transactions
+                rating: Math.round(avgRating * 10) / 10,
+                profileViews: 0, // TODO: Implement view tracking
+            });
+
+        } catch (error) {
+            console.error("Error loading dashboard:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8">
             {/* Welcome & Status */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Hola, Juan! 👋</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        Hola, {profile?.full_name || 'Profesional'}! 👋
+                    </h1>
                     <p className="text-muted-foreground mt-1">
                         Tu perfil está activo y visible para clientes cercanos.
                     </p>
@@ -59,7 +155,55 @@ export default function ProfessionalDashboard() {
                 </Button>
             </div>
 
-            {/* ... */}
+            {/* Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Trabajos Activos</CardTitle>
+                        <Briefcase className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.activeJobs}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Propuestas Pendientes</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.pendingProposals}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Ganado (mes)</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">${stats.monthlyEarnings.toLocaleString('es-AR')}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Rating</CardTitle>
+                        <Star className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.rating > 0 ? stats.rating : '-'}</div>
+                        {stats.rating > 0 && <p className="text-xs text-muted-foreground">⭐ Promedio</p>}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Vistas Perfil</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.profileViews}</div>
+                    </CardContent>
+                </Card>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Nearby Jobs Feed */}
@@ -72,62 +216,52 @@ export default function ProfessionalDashboard() {
                     </div>
 
                     <div className="space-y-4">
-                        {nearbyJobs.map((job) => (
-                            <JobCard
-                                key={job.id}
-                                job={job as any}
-                                showActions={true}
-                            />
-                        ))}
-
-                        <div className="text-center pt-4">
-                            <Button variant="outline" className="w-full" asChild>
-                                <Link href="/pro/browse-jobs">Explorar más trabajos</Link>
-                            </Button>
-                        </div>
+                        {nearbyJobs.length === 0 ? (
+                            <Card className="p-12 text-center">
+                                <p className="text-muted-foreground mb-4">
+                                    No hay trabajos disponibles en este momento
+                                </p>
+                                <Button asChild>
+                                    <Link href="/pro/browse-jobs">
+                                        Buscar trabajos
+                                    </Link>
+                                </Button>
+                            </Card>
+                        ) : (
+                            nearbyJobs.map((job) => (
+                                <JobCard
+                                    key={job.id}
+                                    job={job as any}
+                                    showActions={true}
+                                />
+                            ))
+                        )}
                     </div>
                 </div>
 
-                {/* Sidebar Actions */}
+                {/* Quick Actions Sidebar */}
                 <div className="space-y-6">
-                    <Card className="bg-primary/5 border-primary/20">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Tu Estado</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium">Visibilidad</span>
-                                <span className="flex h-2 w-2 rounded-full bg-green-600" />
-                            </div>
-
-                            <div className="pt-2">
-                                <Button variant="outline" className="w-full text-xs h-8" asChild>
-                                    <Link href="/profile">Editar perfil</Link>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Próximos Turnos</CardTitle>
+                            <CardTitle>Acciones rápidas</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <div className="border-l-2 border-primary pl-3 py-1">
-                                    <p className="text-xs text-muted-foreground">Hoy, 14:00</p>
-                                    <p className="font-medium text-sm">Visita técnica - Juan P.</p>
-                                    <p className="text-xs text-muted-foreground truncate">Av. Santa Fe 2300...</p>
-                                </div>
-                                <div className="border-l-2 border-muted pl-3 py-1">
-                                    <p className="text-xs text-muted-foreground">Mañana, 09:00</p>
-                                    <p className="font-medium text-sm">Instalación - Maria G.</p>
-                                </div>
-                            </div>
+                        <CardContent className="space-y-2">
+                            <Button asChild variant="outline" className="w-full justify-start">
+                                <Link href="/pro/my-jobs">
+                                    <Briefcase className="mr-2 h-4 w-4" />
+                                    Ver mis trabajos
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline" className="w-full justify-start">
+                                <Link href="/profile">
+                                    <Star className="mr-2 h-4 w-4" />
+                                    Editar perfil
+                                </Link>
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
