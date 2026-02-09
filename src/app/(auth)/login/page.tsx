@@ -59,9 +59,27 @@ export default function LoginPage() {
                 return;
             }
 
-            toast.success("¡Bienvenido de nuevo!");
-            router.push("/dashboard");
-            router.refresh();
+            // Get user profile to determine dashboard
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('user_type')
+                    .eq('user_id', user.id)
+                    .single();
+
+                toast.success("¡Bienvenido de nuevo!");
+
+                // Redirect based on user type
+                if (profile?.user_type === 'professional') {
+                    router.push("/pro/dashboard");
+                } else if (profile?.user_type === 'admin') {
+                    router.push("/admin/dashboard");
+                } else {
+                    router.push("/client/dashboard");
+                }
+                router.refresh();
+            }
         } catch (error) {
             toast.error("Ocurrió un error inesperado");
             console.error(error);
