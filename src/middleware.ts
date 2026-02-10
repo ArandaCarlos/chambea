@@ -75,6 +75,36 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
+    // Role-based access control
+    if (user && isProtectedPath) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('user_type')
+            .eq('user_id', user.id)
+            .single()
+
+        const userType = profile?.user_type
+
+        // Prevent professionals from accessing client routes
+        if (userType === 'professional' && request.nextUrl.pathname.startsWith('/client')) {
+            return NextResponse.redirect(new URL('/pro/dashboard', request.url))
+        }
+
+        // Prevent clients from accessing professional routes
+        if (userType === 'client' && request.nextUrl.pathname.startsWith('/pro')) {
+            return NextResponse.redirect(new URL('/client/dashboard', request.url))
+        }
+
+        // Prevent non-admins from accessing admin routes
+        if (userType !== 'admin' && request.nextUrl.pathname.startsWith('/admin')) {
+            if (userType === 'professional') {
+                return NextResponse.redirect(new URL('/pro/dashboard', request.url))
+            } else {
+                return NextResponse.redirect(new URL('/client/dashboard', request.url))
+            }
+        }
+    }
+
     // If already logged in and trying to access auth pages, redirect to dashboard
     if (isAuthPath && user) {
         // Get user profile to determine which dashboard
@@ -86,6 +116,8 @@ export async function middleware(request: NextRequest) {
 
         if (profile?.user_type === 'professional') {
             return NextResponse.redirect(new URL('/pro/dashboard', request.url))
+        } else if (profile?.user_type === 'admin') {
+            return NextResponse.redirect(new URL('/admin/dashboard', request.url))
         } else {
             return NextResponse.redirect(new URL('/client/dashboard', request.url))
         }
