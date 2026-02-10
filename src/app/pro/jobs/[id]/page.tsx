@@ -39,6 +39,8 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
                 }
             }
 
+            console.log("Fetching job with ID:", params.id);
+
             // Fetch job details with client info
             const { data: jobData, error } = await supabase
                 .from('jobs')
@@ -48,13 +50,18 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
                         id,
                         full_name,
                         avatar_url,
-                        rating:reviews!receiver_id(rating)
+                        rating:reviews!reviewee_id(rating)
                     )
                 `)
                 .eq('id', params.id)
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                console.error("Supabase error fetching job:", error);
+                throw error;
+            }
+
+            console.log("Job data found:", jobData);
 
             // Calculate average rating if exists
             let avgRating = 0;
