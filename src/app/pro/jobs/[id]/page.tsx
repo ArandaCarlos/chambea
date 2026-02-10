@@ -1,37 +1,111 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { JobDetails } from "@/components/job/JobDetails";
 import { ProposalForm } from "@/components/proposal/ProposalForm";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
-const MOCK_JOB = {
-    id: "1",
-    title: "Instalación de luminarias LED",
-    description: "Necesito cambiar 10 lámparas halógenas por paneles LED en una oficina. El techo es de durlock y tiene una altura de 3 metros. Yo proveo los materiales, solo necesito mano de obra.",
-    category_id: "electrical",
-    subcategory_id: "installation",
-    status: "open",
-    urgency: "medium",
-    created_at: new Date().toISOString(),
-    preferred_date: new Date(Date.now() + 86400000).toISOString(),
-    preferred_time_slot: "morning",
-    client_budget_max: 45000,
-    address: "Av. Corrientes 1234",
-    city: "Microcentro, CABA",
-    work_photos: [],
-    client: {
-        id: "c1",
-        full_name: "Empresa SA",
-        avatar_url: "https://github.com/shadcn.png",
-        rating: 5.0
-    }
-} as any;
+
 
 export default function ProfessionalJobPage({ params }: { params: { id: string } }) {
-    // In real app: fetch job by id
+    const supabase = createClient();
+    const router = useRouter();
+    const [job, setJob] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        loadJobDetails();
+    }, []);
+
+    async function loadJobDetails() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                // Get profile to check if user is professional
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('id, user_type')
+                    .eq('user_id', user.id)
+                    .single();
+
+                if (profile) {
+                    setCurrentUserId(profile.id);
+                }
+            }
+
+            // Fetch job details with client info
+            const { data: jobData, error } = await supabase
+                .from('jobs')
+                .select(`
+                    *,
+                    client:profiles!client_id (
+                        id,
+                        full_name,
+                        avatar_url,
+                        rating:reviews!receiver_id(rating)
+                    )
+                `)
+                .eq('id', params.id)
+                .single();
+
+            if (error) throw error;
+
+            // Calculate average rating if exists
+            let avgRating = 0;
+            if (jobData.client?.rating && Array.isArray(jobData.client.rating)) {
+                const ratings = jobData.client.rating.map((r: any) => r.rating);
+                if (ratings.length > 0) {
+                    avgRating = ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length;
+                }
+            }
+
+            setJob({
+                ...jobData,
+                client: {
+                    ...jobData.client,
+                    rating: avgRating
+                },
+                location: {
+                    address: jobData.address,
+                    city: jobData.city,
+                }
+            });
+
+        } catch (error) {
+            console.error("Error loading job:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (!job) {
+        return (
+            <div className="text-center py-12">
+                <h3 className="text-lg font-semibold">Trabajo no encontrado</h3>
+                <Button asChild className="mt-4" variant="outline">
+                    <Link href="/pro/browse-jobs">Volver al listado</Link>
+                </Button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
-            <JobDetails job={MOCK_JOB} isOwner={false} />
+            <JobDetails job={job} isOwner={false} />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
