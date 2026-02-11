@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ArrowLeft, Clock, MessageSquare, ShieldCheck, DollarSign, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,32 +14,36 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 
-export default function JobProposalsPage({ params }: { params: { id: string } }) {
+export default function JobProposalsPage() {
+    const params = useParams();
     const supabase = createClient();
     const [proposals, setProposals] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [acceptedProposalId, setAcceptedProposalId] = useState<string | null>(null);
     const [jobStatus, setJobStatus] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchProposals();
-    }, [params.id]);
+    const jobId = params?.id ? String(params.id) : null;
 
-    async function fetchProposals() {
+    useEffect(() => {
+        if (jobId && jobId !== 'undefined') {
+            fetchProposals(jobId);
+        }
+    }, [jobId]);
+
+    async function fetchProposals(id: string) {
         setLoading(true);
         try {
             // Get Job Status First
             const { data: job, error: jobError } = await supabase
                 .from('jobs')
                 .select('status, professional_id')
-                .eq('id', params.id)
+                .eq('id', id)
                 .single();
 
             if (jobError) throw jobError;
             setJobStatus(job.status);
             if (job.status === 'accepted' || job.status === 'in_progress' || job.status === 'completed') {
-                // If job is already assigned, find which proposal corresponds (or implied via professional_id)
-                // For now, assume professional_id matches
+                // If job is already assigned, find which proposal corresponds
             }
 
             // Get Proposals with Professional Data
@@ -68,7 +73,7 @@ export default function JobProposalsPage({ params }: { params: { id: string } })
                         )
                     )
                 `)
-                .eq('job_id', params.id)
+                .eq('job_id', id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -140,12 +145,12 @@ export default function JobProposalsPage({ params }: { params: { id: string } })
                         quoted_price: price,
                         accepted_at: new Date().toISOString()
                     })
-                    .eq('id', params.id);
+                    .eq('id', jobId);
 
                 if (jobError) throw jobError;
 
                 setAcceptedProposalId(proposalId);
-                fetchProposals(); // Refresh to see contact info
+                if (jobId) fetchProposals(jobId); // Refresh to see contact info
             },
             {
                 loading: 'Procesando pago y contratación...',
@@ -214,7 +219,7 @@ export default function JobProposalsPage({ params }: { params: { id: string } })
                                                         <p>Podés ver el teléfono en su perfil completo.</p>
                                                     </div>
                                                     <Button className="w-full" asChild>
-                                                        <Link href={`/client/messages?job=${params.id}&pro=${proposal.professional.id}`}>
+                                                        <Link href={`/client/messages?job=${jobId}&pro=${proposal.professional.id}`}>
                                                             Chatear con {proposal.professional.full_name.split(' ')[0]}
                                                         </Link>
                                                     </Button>

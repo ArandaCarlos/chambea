@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -31,24 +31,30 @@ interface Job {
     updated_at: string;
 }
 
-export default function ClientJobDetailPage({ params }: { params: { id: string } }) {
+export default function ClientJobDetailPage() {
     const router = useRouter();
+    const params = useParams();
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [job, setJob] = useState<Job | null>(null);
     const [proposalsCount, setProposalsCount] = useState(0);
 
+    const jobId = params?.id ? String(params.id) : null;
+
     useEffect(() => {
-        if (!params.id || params.id === 'undefined') {
-            console.error("Invalid Job ID:", params.id);
-            toast.error("ID de trabajo inválido");
-            router.push("/client/jobs");
+        // console.log("ClientJobPage params:", params);
+        if (!jobId || jobId === 'undefined') {
+            if (params && Object.keys(params).length > 0) {
+                console.error("Invalid Job ID in Client Page:", jobId);
+                toast.error("ID de trabajo inválido");
+                router.push("/client/jobs");
+            }
             return;
         }
-        loadJobDetails();
-    }, [params.id]);
+        loadJobDetails(jobId);
+    }, [jobId, params, router]);
 
-    async function loadJobDetails() {
+    async function loadJobDetails(id: string) {
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
@@ -61,7 +67,7 @@ export default function ClientJobDetailPage({ params }: { params: { id: string }
             const { data: jobData, error: jobError } = await supabase
                 .from('jobs')
                 .select('*')
-                .eq('id', params.id)
+                .eq('id', id)
                 .single();
 
             if (jobError) throw jobError;
@@ -72,7 +78,7 @@ export default function ClientJobDetailPage({ params }: { params: { id: string }
             const { count, error: countError } = await supabase
                 .from('proposals')
                 .select('*', { count: 'exact', head: true })
-                .eq('job_id', params.id);
+                .eq('job_id', id);
 
             if (!countError && count !== null) {
                 setProposalsCount(count);

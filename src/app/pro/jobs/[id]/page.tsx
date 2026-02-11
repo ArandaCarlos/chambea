@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { JobDetails } from "@/components/job/JobDetails";
 import { ProposalForm } from "@/components/proposal/ProposalForm";
@@ -11,24 +11,29 @@ import Link from "next/link";
 
 
 
-export default function ProfessionalJobPage({ params }: { params: { id: string } }) {
+export default function ProfessionalJobPage() {
     const supabase = createClient();
     const router = useRouter();
+    const params = useParams();
     const [job, setJob] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+    const jobId = params?.id ? String(params.id) : null;
+
     useEffect(() => {
-        if (!params.id || params.id === 'undefined') {
-            console.error("Invalid Job ID:", params.id);
-            // toast.error("ID de trabajo inválido"); // Optional
-            router.push("/pro/dashboard");
+        if (!jobId || jobId === 'undefined') {
+            if (params && Object.keys(params).length > 0) {
+                console.error("Invalid Job ID:", jobId);
+                // toast.error("ID de trabajo inválido"); // Optional
+                router.push("/pro/dashboard");
+            }
             return;
         }
-        loadJobDetails();
-    }, [params.id]);
+        loadJobDetails(jobId);
+    }, [jobId, params, router]);
 
-    async function loadJobDetails() {
+    async function loadJobDetails(id: string) {
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
@@ -45,7 +50,7 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
                 }
             }
 
-            console.log("Fetching job with ID:", params.id);
+            console.log("Fetching job with ID:", id);
 
             // Fetch job details with client info
             const { data: jobData, error } = await supabase
@@ -59,7 +64,7 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
                         rating:reviews!reviewee_id(rating)
                     )
                 `)
-                .eq('id', params.id)
+                .eq('id', id)
                 .single();
 
             if (error) {
@@ -122,7 +127,7 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                    <ProposalForm jobId={params.id} />
+                    <ProposalForm jobId={jobId!} />
                 </div>
             </div>
         </div>

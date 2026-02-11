@@ -1,6 +1,7 @@
 "use client";
 
 import { ProfessionalProfile } from "@/components/professional/ProfessionalProfile";
+import { useParams } from "next/navigation";
 // import { getProfessionalById } from "@/lib/api/professionals"; (Simulated for now)
 
 // Mock Data
@@ -25,17 +26,9 @@ const MOCK_PROFILE = {
     badges: ["Garantía de Satisfacción", "Respuesta Rápida"]
 };
 
-// Params type needed for Next.js App Router dynamic pages
-interface PageProps {
-    params: {
-        id: string;
-    };
-}
-
-// In Next.js 15+, params is a Promise, but in 14 it's just params.
-// We'll stick to basic usage or handle searchParams.
-export default function ProfessionalPage({ params }: PageProps) {
-    // In a real app we'd fetch data here:
+export default function ProfessionalPage() {
+    const params = useParams();
+    // In a real app we'd fetch data using params.id
     // const profile = await getProfessionalById(params.id);
     const profile = MOCK_PROFILE;
 

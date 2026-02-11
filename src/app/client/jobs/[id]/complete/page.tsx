@@ -3,11 +3,14 @@
 import { CheckCircle2 } from "lucide-react";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useParams } from "next/navigation";
 
-export default function CompleteJobPage({ params }: { params: { id: string } }) {
+export default function CompleteJobPage() {
+    const params = useParams();
+
     // Mock Data
     const job = {
-        id: params.id,
+        id: params?.id ? String(params.id) : "unknown",
         title: "Instalación de luminarias LED",
         professional: {
             name: "Juan Pérez"

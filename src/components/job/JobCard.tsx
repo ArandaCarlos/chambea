@@ -46,6 +46,12 @@ export function JobCard({ job, showActions = true, href }: JobCardProps) {
     const isClientContext = pathname?.startsWith('/client');
     const defaultHref = isClientContext ? `/client/jobs/${job.id}` : `/pro/jobs/${job.id}`;
 
+    // Debug log to trace undefined ID issues
+    if (!job.id) {
+        console.error("JobCard received job without ID:", job);
+    }
+    // console.log(`JobCard [${job.id}] -> context: ${isClientContext ? 'client' : 'pro'} -> href: ${href || defaultHref}`);
+
     const linkHref = href || defaultHref;
 
     return (

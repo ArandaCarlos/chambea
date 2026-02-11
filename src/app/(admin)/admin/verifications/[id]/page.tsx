@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,18 +28,21 @@ const MOCK_DETAIL = {
     status: "pending"
 };
 
-export default function VerificationDetailPage({ params }: { params: { id: string } }) {
+export default function VerificationDetailPage() {
     const router = useRouter();
+    const params = useParams();
     const [isProcessing, setIsProcessing] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
     const [showRejectForm, setShowRejectForm] = useState(false);
     const supabase = createClient();
 
+    const verificationId = params?.id ? String(params.id) : "unknown";
+
     const handleApprove = async () => {
         setIsProcessing(true);
         try {
             // In real app replace URL params with actual DB update
-            // await supabase.from('profiles').update({ verification_status: 'approved' }).eq('id', params.id);
+            // await supabase.from('profiles').update({ verification_status: 'approved' }).eq('id', verificationId);
 
             await new Promise(r => setTimeout(r, 1000)); // Mock delay
             toast.success("Profesional aprobado exitosamente");
@@ -59,7 +62,7 @@ export default function VerificationDetailPage({ params }: { params: { id: strin
 
         setIsProcessing(true);
         try {
-            // await supabase.from('profiles').update({ verification_status: 'rejected', reason: rejectReason }).eq('id', params.id);
+            // await supabase.from('profiles').update({ verification_status: 'rejected', reason: rejectReason }).eq('id', verificationId);
 
             await new Promise(r => setTimeout(r, 1000));
             toast.success("Solicitud rechazada");
@@ -80,7 +83,7 @@ export default function VerificationDetailPage({ params }: { params: { id: strin
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Revisión de Identidad</h1>
                     <p className="text-muted-foreground">
-                        Solicitud #{params.id}
+                        Solicitud #{verificationId}
                     </p>
                 </div>
             </div>
