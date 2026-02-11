@@ -27,13 +27,14 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
     const isPro = pathname.startsWith("/pro");
     const isAdmin = pathname.startsWith("/admin");
 
-    // Dynamic Home Link
+    // Dynamic Links
     const dashboardLink = isClient ? "/client/dashboard" : isPro ? "/pro/dashboard" : isAdmin ? "/admin/dashboard" : "/dashboard";
+    const messagesLink = isClient ? "/client/messages" : isPro ? "/pro/messages" : "/messages";
 
     // Common links
     const commonLinks = [
         { href: dashboardLink, label: "Inicio", icon: Home },
-        { href: "/messages", label: "Mensajes", icon: MessageSquare },
+        { href: messagesLink, label: "Mensajes", icon: MessageSquare },
         { href: "/profile", label: "Mi Perfil", icon: User },
     ];
 

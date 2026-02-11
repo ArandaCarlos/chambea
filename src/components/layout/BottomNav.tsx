@@ -24,7 +24,7 @@ export function BottomNav() {
             { href: "/pro/dashboard", label: "Inicio", icon: Home },
             { href: "/pro/browse-jobs", label: "Trabajos", icon: Search },
             { href: "/pro/my-jobs", label: "Mis Trabajos", icon: Briefcase },
-            { href: "/messages", label: "Mensajes", icon: MessageSquare },
+            { href: "/pro/messages", label: "Mensajes", icon: MessageSquare },
             { href: "/profile", label: "Perfil", icon: User },
         ];
     } else if (isClient) {
@@ -32,7 +32,7 @@ export function BottomNav() {
             { href: "/client/dashboard", label: "Inicio", icon: Home },
             { href: "/client/post-job", label: "Publicar", icon: Briefcase },
             { href: "/client/jobs", label: "Solicitudes", icon: MessageSquare }, // Reusing icon
-            { href: "/messages", label: "Mensajes", icon: MessageSquare },
+            { href: "/client/messages", label: "Mensajes", icon: MessageSquare },
             { href: "/profile", label: "Perfil", icon: User },
         ];
     }

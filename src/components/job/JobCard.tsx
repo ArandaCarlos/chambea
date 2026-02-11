@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { JOB_STATUSES, URGENCY_LEVELS, JobCategoryId, JOB_CATEGORIES } from "@/lib/constants/job-categories";
 import { formatDate } from "@/lib/utils/dates";
 
+import { usePathname } from "next/navigation";
+
 interface JobCardProps {
     job: {
         id: string;
@@ -36,9 +38,15 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, showActions = true, href }: JobCardProps) {
+    const pathname = usePathname();
     const urgency = URGENCY_LEVELS[job.urgency];
     const category = JOB_CATEGORIES.find(c => c.id === job.category_id);
-    const linkHref = href || (job.status === 'open' ? `/pro/jobs/${job.id}` : `/client/jobs/${job.id}`);
+
+    // Smart detection of role based on current path
+    const isClientContext = pathname?.startsWith('/client');
+    const defaultHref = isClientContext ? `/client/jobs/${job.id}` : `/pro/jobs/${job.id}`;
+
+    const linkHref = href || defaultHref;
 
     return (
         <Card className="overflow-hidden hover:shadow-md transition-shadow">
