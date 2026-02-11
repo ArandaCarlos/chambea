@@ -32,14 +32,17 @@ interface JobCardProps {
         created_at: string;
     };
     showActions?: boolean;
+    href?: string;
 }
 
-export function JobCard({ job, showActions = true }: JobCardProps) {
+export function JobCard({ job, showActions = true, href }: JobCardProps) {
     const urgency = URGENCY_LEVELS[job.urgency];
     const category = JOB_CATEGORIES.find(c => c.id === job.category_id);
+    const linkHref = href || (job.status === 'open' ? `/pro/jobs/${job.id}` : `/client/jobs/${job.id}`);
 
     return (
         <Card className="overflow-hidden hover:shadow-md transition-shadow">
+            {/* ... header and content ... */}
             <CardHeader className="p-4 pb-2 space-y-2">
                 <div className="flex justify-between items-start gap-2">
                     <div className="flex gap-2">
@@ -100,7 +103,7 @@ export function JobCard({ job, showActions = true }: JobCardProps) {
             {showActions && job.id && (
                 <CardFooter className="p-4 pt-0 bg-muted/20 mt-2">
                     <Button asChild className="w-full mt-3">
-                        <Link href={job.status === 'open' ? `/pro/jobs/${job.id}` : `/client/jobs/${job.id}`}>Ver detalles</Link>
+                        <Link href={linkHref}>Ver detalles</Link>
                     </Button>
                 </CardFooter>
             )}

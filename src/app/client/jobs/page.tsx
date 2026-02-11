@@ -153,7 +153,7 @@ export default function ClientJobsPage() {
                     ) : (
                         openJobs.map((job) => (
                             <div key={job.id} className="relative">
-                                <JobCard job={job as any} />
+                                <JobCard job={job as any} href={`/client/jobs/${job.id}`} />
                                 {job._count && job._count.proposals > 0 && (
                                     <div className="absolute top-4 right-4">
                                         <Button size="sm" asChild variant="secondary">
@@ -178,7 +178,7 @@ export default function ClientJobsPage() {
                         </div>
                     ) : (
                         activeJobs.map((job) => (
-                            <JobCard key={job.id} job={job as any} />
+                            <JobCard key={job.id} job={job as any} href={`/client/jobs/${job.id}`} />
                         ))
                     )}
                 </TabsContent>
@@ -192,7 +192,7 @@ export default function ClientJobsPage() {
                         </div>
                     ) : (
                         completedJobs.map((job) => (
-                            <JobCard key={job.id} job={job as any} />
+                            <JobCard key={job.id} job={job as any} href={`/client/jobs/${job.id}`} />
                         ))
                     )}
                 </TabsContent>

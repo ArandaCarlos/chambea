@@ -222,7 +222,7 @@ export default function ClientDashboard() {
                             </Card>
                         ) : (
                             recentJobs.map((job) => (
-                                <JobCard key={job.id} job={job as any} />
+                                <JobCard key={job.id} job={job as any} href={`/client/jobs/${job.id}`} />
                             ))
                         )}
                     </div>
