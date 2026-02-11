@@ -109,6 +109,14 @@ export function ChatWindow({ jobId, otherUser, currentUser }: ChatWindowProps) {
         }
     };
 
+    if (!currentUser?.id || !otherUser?.id || !jobId) {
+        return (
+            <div className="flex flex-col h-[600px] border rounded-xl overflow-hidden bg-background shadow-sm items-center justify-center">
+                <p className="text-muted-foreground">Cargando chat...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-[600px] border rounded-xl overflow-hidden bg-background shadow-sm">
             {/* Header */}

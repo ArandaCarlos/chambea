@@ -97,7 +97,7 @@ export function JobCard({ job, showActions = true }: JobCardProps) {
                 </div>
             </CardContent>
 
-            {showActions && (
+            {showActions && job.id && (
                 <CardFooter className="p-4 pt-0 bg-muted/20 mt-2">
                     <Button asChild className="w-full mt-3">
                         <Link href={job.status === 'open' ? `/pro/jobs/${job.id}` : `/client/jobs/${job.id}`}>Ver detalles</Link>

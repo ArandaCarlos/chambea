@@ -126,7 +126,7 @@ export default function ProfessionalMessagesPage() {
                         <Link href="/pro/browse-jobs">Buscar trabajos</Link>
                     </Button>
                 </Card>
-            ) : selectedConversation ? (
+            ) : selectedConversation && currentUserId ? (
                 <div className="max-w-3xl mx-auto">
                     <Button
                         variant="ghost"

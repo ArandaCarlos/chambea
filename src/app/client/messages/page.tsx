@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,9 @@ interface Conversation {
     unread_count: number;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -84,13 +85,48 @@ export default function MessagesPage() {
                             other_user: otherUser,
                             last_message: msg.content,
                             last_message_at: msg.created_at,
-                            unread_count: 0 // TODO: Implement unread tracking
+                            unread_count: 0
                         });
                     }
                 }
             }
 
-            setConversations(Array.from(conversationMap.values()));
+            const loadedConversations = Array.from(conversationMap.values());
+            setConversations(loadedConversations);
+
+            // Check for new conversation params
+            const jobIdParam = searchParams.get('job');
+            const proIdParam = searchParams.get('pro');
+
+            if (jobIdParam && proIdParam) {
+                // Check if conversation already exists
+                const existingKey = `${jobIdParam}-${proIdParam}`;
+                const existingConv = conversationMap.get(existingKey);
+
+                if (existingConv) {
+                    setSelectedConversation(existingConv);
+                } else {
+                    // Create draft conversation logic
+                    // First check if profile exists to avoid errors
+                    const { data: proUser } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, avatar_url')
+                        .eq('id', proIdParam)
+                        .single();
+
+                    if (proUser) {
+                        const draftConv: Conversation = {
+                            id: 'draft',
+                            job_id: jobIdParam,
+                            other_user: proUser,
+                            last_message: '',
+                            last_message_at: new Date().toISOString(),
+                            unread_count: 0
+                        };
+                        setSelectedConversation(draftConv);
+                    }
+                }
+            }
         } catch (error) {
             console.error("Error loading conversations:", error);
         } finally {
@@ -115,7 +151,7 @@ export default function MessagesPage() {
                 </p>
             </div>
 
-            {conversations.length === 0 ? (
+            {conversations.length === 0 && !selectedConversation ? (
                 <Card className="p-12 text-center">
                     <MessageCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No tenés mensajes todavía</h3>
@@ -126,7 +162,7 @@ export default function MessagesPage() {
                         <Link href="/client/post-job">Publicar trabajo</Link>
                     </Button>
                 </Card>
-            ) : selectedConversation ? (
+            ) : selectedConversation && currentUserId ? (
                 <div className="max-w-3xl mx-auto">
                     <Button
                         variant="ghost"
@@ -177,5 +213,13 @@ export default function MessagesPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+            <MessagesContent />
+        </Suspense>
     );
 }

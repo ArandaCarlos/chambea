@@ -39,6 +39,12 @@ export default function ClientJobDetailPage({ params }: { params: { id: string }
     const [proposalsCount, setProposalsCount] = useState(0);
 
     useEffect(() => {
+        if (!params.id || params.id === 'undefined') {
+            console.error("Invalid Job ID:", params.id);
+            toast.error("ID de trabajo inválido");
+            router.push("/client/jobs");
+            return;
+        }
         loadJobDetails();
     }, [params.id]);
 
