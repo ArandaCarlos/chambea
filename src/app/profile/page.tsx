@@ -54,8 +54,12 @@ export default function ProfilePage() {
                 .eq('user_id', user.id)
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                console.error("Profile fetch error:", error);
+                throw error;
+            }
 
+            console.log("Profile loaded:", data);
             setProfile(data);
             setFormData({
                 full_name: data.full_name || "",

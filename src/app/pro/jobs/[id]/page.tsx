@@ -19,8 +19,14 @@ export default function ProfessionalJobPage({ params }: { params: { id: string }
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!params.id || params.id === 'undefined') {
+            console.error("Invalid Job ID:", params.id);
+            // toast.error("ID de trabajo inválido"); // Optional
+            router.push("/pro/dashboard");
+            return;
+        }
         loadJobDetails();
-    }, []);
+    }, [params.id]);
 
     async function loadJobDetails() {
         try {
