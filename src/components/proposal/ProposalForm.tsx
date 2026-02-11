@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +38,8 @@ export function ProposalForm({ jobId }: ProposalFormProps) {
     const router = useRouter();
     const supabase = createClient();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasProposed, setHasProposed] = useState(false);
+    const [checkingProposal, setCheckingProposal] = useState(true);
 
     const form = useForm<z.infer<typeof proposalSchema>>({
         resolver: zodResolver(proposalSchema),
@@ -51,6 +53,41 @@ export function ProposalForm({ jobId }: ProposalFormProps) {
     const price = parseFloat(form.watch("quoted_price") || "0");
     const commission = price * COMMISSION_RATE;
     const earnings = price - commission;
+
+    useEffect(() => {
+        checkExistingProposal();
+    }, [jobId]);
+
+    async function checkExistingProposal() {
+        setCheckingProposal(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .single();
+
+            if (!profile) return;
+
+            const { data: proposal } = await supabase
+                .from('proposals')
+                .select('id')
+                .eq('job_id', jobId)
+                .eq('professional_id', profile.id)
+                .maybeSingle();
+
+            if (proposal) {
+                setHasProposed(true);
+            }
+        } catch (error) {
+            console.error("Error checking proposal:", error);
+        } finally {
+            setCheckingProposal(false);
+        }
+    }
 
     async function onSubmit(data: z.infer<typeof proposalSchema>) {
         setIsSubmitting(true);
@@ -83,7 +120,9 @@ export function ProposalForm({ jobId }: ProposalFormProps) {
             if (error) throw error;
 
             toast.success("¡Propuesta enviada!");
-            router.push("/pro/dashboard");
+            setHasProposed(true);
+            router.refresh();
+            // router.push("/pro/my-jobs"); // Optional redirect
 
         } catch (error) {
             console.error(error);
@@ -93,8 +132,38 @@ export function ProposalForm({ jobId }: ProposalFormProps) {
         }
     }
 
+    if (checkingProposal) {
+        return (
+            <Card className="border-2 border-primary/10">
+                <CardContent className="py-8 flex justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (hasProposed) {
+        return (
+            <Card className="border-2 border-primary/10 bg-muted/50" id="proposal-form">
+                <CardHeader>
+                    <CardTitle className="text-green-600 flex items-center gap-2">
+                        <span className="text-xl">✓</span> Ya te postulaste a este trabajo
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground mb-4">
+                        Tu propuesta ya fue enviada y está pendiente de revisión por el cliente.
+                    </p>
+                    <Button variant="outline" className="w-full" onClick={() => router.push("/pro/my-jobs")}>
+                        Ver mis postulaciones
+                    </Button>
+                </CardContent>
+            </Card>
+        );
+    }
+
     return (
-        <Card className="border-2 border-primary/10">
+        <Card className="border-2 border-primary/10" id="proposal-form">
             <CardHeader>
                 <CardTitle>Enviar Propuesta</CardTitle>
             </CardHeader>

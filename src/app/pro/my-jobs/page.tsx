@@ -21,10 +21,12 @@ export default function ProfessionalMyJobsPage() {
     }, []);
 
     async function loadMyJobs() {
+        console.log("Loading my jobs...");
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) {
+                console.log("No user found");
                 router.push("/login");
                 return;
             }
@@ -36,12 +38,18 @@ export default function ProfessionalMyJobsPage() {
                 .eq('user_id', user.id)
                 .single();
 
-            if (!profile) return;
+            if (!profile) {
+                console.log("No profile found for user:", user.id);
+                return;
+            }
+
+            console.log("Fetching proposals for profile:", profile.id);
 
             // Get proposals and related jobs
             const { data: proposals, error } = await supabase
                 .from('proposals')
                 .select(`
+                    id,
                     status,
                     job:jobs (
                         *,
@@ -54,18 +62,31 @@ export default function ProfessionalMyJobsPage() {
                 .eq('professional_id', profile.id)
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                console.error("Error fetching proposals:", error);
+                throw error;
+            }
 
-            const transformedJobs = proposals.map((p: any) => ({
-                ...p.job,
-                proposal_status: p.status,
-                client: p.job.client || { full_name: "Cliente", avatar_url: null },
-                location: {
-                    address: p.job.address,
-                    city: p.job.city,
-                },
-                budget: p.job.client_budget_max,
-            }));
+            console.log("Proposals found:", proposals);
+
+            const transformedJobs = proposals.map((p: any) => {
+                if (!p.job) {
+                    console.warn("Proposal without job data:", p);
+                    return null;
+                }
+                return {
+                    ...p.job,
+                    proposal_status: p.status,
+                    client: p.job.client || { full_name: "Cliente", avatar_url: null },
+                    location: {
+                        address: p.job.address,
+                        city: p.job.city,
+                    },
+                    budget: p.job.client_budget_max,
+                };
+            }).filter(Boolean); // Filter out nulls
+
+            console.log("Transformed Jobs:", transformedJobs);
 
             setJobs(transformedJobs);
         } catch (error) {

@@ -118,11 +118,16 @@ export function JobDetails({ job, isOwner = false }: JobDetailsProps) {
                             </>
                         ) : (
                             <>
-                                <Button className="w-full text-lg h-12">
+                                <Button
+                                    className="w-full text-lg h-12"
+                                    onClick={() => {
+                                        document.getElementById('proposal-form')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                >
                                     Postularme al trabajo
                                 </Button>
                                 <Button variant="outline" className="w-full" asChild>
-                                    <Link href={`/messages/new?job=${job.id}`}>
+                                    <Link href={`/pro/messages?job=${job.id}&client=${job.client.id}`}>
                                         <MessageSquare className="mr-2 h-4 w-4" />
                                         Hacer una pregunta
                                     </Link>
