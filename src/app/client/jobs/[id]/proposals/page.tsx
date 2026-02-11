@@ -62,12 +62,12 @@ export default function JobProposalsPage() {
                         avatar_url,
                         latitude,
                         longitude,
+                        identity_verified,
                         professional:professional_profiles (
                             trade,
                             hourly_rate,
                             average_rating,
                             total_reviews,
-                            is_verified,
                             available_now,
                             service_areas
                         )
@@ -96,7 +96,7 @@ export default function JobProposalsPage() {
                     hourly_rate: p.professional.professional?.hourly_rate || 0,
                     rating: p.professional.professional?.average_rating || 0,
                     reviews_count: p.professional.professional?.total_reviews || 0,
-                    is_verified: p.professional.professional?.is_verified || false,
+                    is_verified: p.professional.identity_verified || false,
                     available_now: p.professional.professional?.available_now || false,
 
                     location: {
