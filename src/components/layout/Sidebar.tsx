@@ -30,12 +30,13 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
     // Dynamic Links
     const dashboardLink = isClient ? "/client/dashboard" : isPro ? "/pro/dashboard" : isAdmin ? "/admin/dashboard" : "/dashboard";
     const messagesLink = isClient ? "/client/messages" : isPro ? "/pro/messages" : "/messages";
+    const profileLink = isClient ? "/client/profile" : isPro ? "/pro/profile" : "/profile";
 
     // Common links
     const commonLinks = [
         { href: dashboardLink, label: "Inicio", icon: Home },
         { href: messagesLink, label: "Mensajes", icon: MessageSquare },
-        { href: "/profile", label: "Mi Perfil", icon: User },
+        { href: profileLink, label: "Mi Perfil", icon: User },
     ];
 
     // Specific links

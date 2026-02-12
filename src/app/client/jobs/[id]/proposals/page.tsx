@@ -142,8 +142,8 @@ export default function JobProposalsPage() {
                     .update({
                         status: 'accepted',
                         professional_id: professionalId,
-                        quoted_price: price,
-                        accepted_at: new Date().toISOString()
+                        quoted_price: price
+                        // accepted_at removed as column does not exist
                     })
                     .eq('id', jobId);
 

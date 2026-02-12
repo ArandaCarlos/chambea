@@ -161,7 +161,7 @@ export function Header() {
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem asChild>
-                                    <Link href="/profile">
+                                    <Link href={pathname.startsWith("/client") ? "/client/profile" : pathname.startsWith("/pro") ? "/pro/profile" : "/profile"}>
                                         <User className="mr-2 h-4 w-4" />
                                         Perfil
                                     </Link>
