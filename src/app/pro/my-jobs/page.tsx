@@ -104,9 +104,20 @@ export default function ProfessionalMyJobsPage() {
         );
     }
 
-    const activeJobs = jobs.filter(j => j.proposal_status === 'accepted' && j.status !== 'completed');
-    const pendingProposals = jobs.filter(j => j.proposal_status === 'pending');
-    const completedJobs = jobs.filter(j => j.status === 'completed');
+    // Fix: Validar tanto el estado de la propuesta como el del trabajo
+    // Si la propuesta fue aceptada, el trabajo debería considerarse activo para el profesional
+    const activeJobs = jobs.filter(j =>
+        (j.proposal_status === 'accepted') &&
+        (j.status !== 'completed' && j.status !== 'cancelled')
+    );
+
+    // Pendientes solo si la propuesta está pending Y el trabajo no fue aceptado por otro (o cancelado/completado)
+    const pendingProposals = jobs.filter(j =>
+        j.proposal_status === 'pending' &&
+        (j.status === 'open') // Hide if job is already accepted by someone else or closed
+    );
+
+    const completedJobs = jobs.filter(j => j.status === 'completed' && j.proposal_status === 'accepted');
 
     return (
         <div className="space-y-6">
@@ -130,7 +141,7 @@ export default function ProfessionalMyJobsPage() {
                             <Briefcase className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                             <h3 className="font-semibold mb-2">No tenés trabajos activos</h3>
                             <p className="text-sm text-muted-foreground mb-4">
-                                Postulate a ofertas para empezar a trabajar
+                                Si te aceptaron una propuesta, aparecerá acá.
                             </p>
                             <Button asChild>
                                 <Link href="/pro/browse-jobs">Buscar trabajos</Link>
@@ -141,10 +152,19 @@ export default function ProfessionalMyJobsPage() {
                             <div key={job.id} className="relative">
                                 <div className="absolute top-4 right-4 z-10">
                                     <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                                        Activo
+                                        Activo / Aceptado
                                     </span>
                                 </div>
+                                {/* HERE: We need to pass a property to JobCard or wrap it to change the link logic */}
+                                {/* For now, we'll keep JobCard but rely on the detail page to handle the view */}
                                 <JobCard job={job} />
+                                <div className="mt-2 flex justify-end px-4 pb-4">
+                                    <Button size="sm" className="w-full md:w-auto" asChild>
+                                        <Link href={`/pro/jobs/${job.id}`}>
+                                            Gestionar Trabajo
+                                        </Link>
+                                    </Button>
+                                </div>
                             </div>
                         ))
                     )}

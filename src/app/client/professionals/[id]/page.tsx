@@ -1,36 +1,85 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ProfessionalProfile } from "@/components/professional/ProfessionalProfile";
-import { useParams } from "next/navigation";
-// import { getProfessionalById } from "@/lib/api/professionals"; (Simulated for now)
-
-// Mock Data
-const MOCK_PROFILE = {
-    id: "1",
-    full_name: "Juan Pérez",
-    avatar_url: "https://github.com/shadcn.png",
-    bio: "Soy plomero matriculado con más de 10 años de experiencia en reparaciones domésticas e industriales. Especialista en detección de fugas y destapes.",
-    city: "Palermo, CABA",
-    trade: "plumbing",
-    hourly_rate: 8000,
-    rating: 4.8,
-    reviews_count: 124,
-    completed_jobs: 1450,
-    is_verified: true,
-    available_now: true,
-    portfolio_photos: [
-        "https://images.unsplash.com/photo-1581244277943-fe4a9c77718e?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1505798577917-a651a4809f19?q=80&w=600&auto=format&fit=crop"
-    ],
-    badges: ["Garantía de Satisfacción", "Respuesta Rápida"]
-};
+import { useParams, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ProfessionalPage() {
     const params = useParams();
-    // In a real app we'd fetch data using params.id
-    // const profile = await getProfessionalById(params.id);
-    const profile = MOCK_PROFILE;
+    const router = useRouter();
+    const supabase = createClient();
+    const [profile, setProfile] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    const professionalId = params?.id ? String(params.id) : null;
+
+    useEffect(() => {
+        if (professionalId) {
+            loadProfessional(professionalId);
+        }
+    }, [professionalId]);
+
+    async function loadProfessional(id: string) {
+        try {
+            // Fetch basic profile + professional profile
+            const { data, error } = await supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    professional:professional_profiles(*)
+                `)
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+
+            if (!data.professional) {
+                toast.error("Perfil de profesional incompleto");
+                router.back();
+                return;
+            }
+
+            // Transform to component format
+            const transformedProfile = {
+                id: data.id,
+                full_name: data.full_name,
+                avatar_url: data.avatar_url,
+                bio: data.bio || "Este profesional aún no ha agregado una descripción.",
+                city: data.city || "Ubicación no disponible",
+                trade: data.professional.trade,
+                hourly_rate: data.professional.hourly_rate,
+                rating: data.professional.average_rating || 0,
+                reviews_count: data.professional.total_reviews || 0,
+                completed_jobs: 0, // Need to count from jobs table if needed
+                is_verified: data.identity_verified,
+                available_now: data.professional.available_now,
+                portfolio_photos: data.professional.portfolio_photos || [],
+                badges: data.professional.badges || []
+            };
+
+            setProfile(transformedProfile);
+
+        } catch (error) {
+            console.error("Error loading professional:", error);
+            toast.error("Error al cargar el perfil");
+            router.push("/client/dashboard");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (!profile) return null;
 
     return <ProfessionalProfile profile={profile} />;
 }
