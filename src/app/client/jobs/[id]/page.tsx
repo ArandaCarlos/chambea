@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, AlertCircle, Eye } from "lucide-react";
+import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, AlertCircle, Eye, MessageSquare, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,13 @@ interface Job {
     work_photos: string[] | null;
     created_at: string;
     updated_at: string;
+    professional?: {
+        id: string;
+        full_name: string;
+        phone: string | null;
+        email: string | null;
+        avatar_url: string | null;
+    } | null;
 }
 
 export default function ClientJobDetailPage() {
@@ -66,7 +73,7 @@ export default function ClientJobDetailPage() {
             // Get job
             const { data: jobData, error: jobError } = await supabase
                 .from('jobs')
-                .select('*')
+                .select('*, professional:professional_id(*)')
                 .eq('id', id)
                 .single();
 
@@ -148,18 +155,54 @@ export default function ClientJobDetailPage() {
                 </Button>
             </div>
 
-            <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold">{job.title}</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Publicado {formatDistanceToNow(new Date(job.created_at), { addSuffix: true, locale: es })}
-                    </p>
-                </div>
-                <div className="flex gap-2">
+            <div className="flex bg-white rounded-lg shadow-sm border p-4 mb-6 items-center justify-between">
+                <div className="flex items-center gap-4">
+                    {/* Status Badge */}
                     {getStatusBadge(job.status)}
+                    <span className="text-muted-foreground">•</span>
                     {getUrgencyBadge(job.urgency)}
                 </div>
             </div>
+
+            {/* Hired Professional Card - Only if accepted/in_progress/completed */}
+            {job.professional && (
+                <Card className="border-green-200 bg-green-50/30 mb-6">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-green-800">
+                            <DollarSign className="h-5 w-5" />
+                            Profesional Contratado
+                        </CardTitle>
+                        <CardDescription>
+                            Has contratado a este profesional para el trabajo.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-lg">
+                                {job.professional.full_name[0]}
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg">{job.professional.full_name}</h3>
+                                <p className="text-sm text-muted-foreground">{job.professional.phone || "Teléfono no disponible"}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button className="flex-1 bg-green-600 hover:bg-green-700" asChild>
+                                <Link href={`/client/messages?job=${job.id}&pro=${job.professional.id}`}>
+                                    <MessageSquare className="mr-2 h-4 w-4" />
+                                    Chatear
+                                </Link>
+                            </Button>
+                            <Button variant="outline" className="flex-1 border-green-200 text-green-700 hover:bg-green-50" asChild>
+                                <Link href={`/client/professionals/${job.professional.id}`}>
+                                    <User className="mr-2 h-4 w-4" />
+                                    Ver Perfil
+                                </Link>
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {proposalsCount > 0 && job.status === 'open' && (
                 <Card className="border-primary/50 bg-primary/5">
