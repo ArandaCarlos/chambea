@@ -52,11 +52,46 @@ export function ChatWindow({ jobId, otherUser, currentUser }: ChatWindowProps) {
 
     // Mock initial load
     useEffect(() => {
-        // In real app, subscribe to Supabase Realtime here
-        setMessages([
-            { id: "1", sender_id: otherUser.id, content: "Hola! Vi tu solicitud. ¿Podrías confirmarme si el techo es muy alto?", created_at: new Date(Date.now() - 3600000).toISOString() }
-        ]);
-    }, [otherUser.id]);
+        if (!jobId || !otherUser.id) return;
+
+        const fetchMessages = async () => {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('job_id', jobId)
+                .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+                .order('created_at', { ascending: true });
+
+            if (!error && data) {
+                setMessages(data);
+                setTimeout(() => {
+                    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            }
+        };
+
+        fetchMessages();
+
+        // Optional: Add realtime subscription here
+        const channel = supabase
+            .channel('chat_messages')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `job_id=eq.${jobId}`
+            }, (payload) => {
+                setMessages(prev => [...prev, payload.new as Message]);
+                setTimeout(() => {
+                    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [jobId, otherUser.id, currentUser.id]);
 
     const detectSuspiciousContent = (text: string) => {
         return BLOCKED_PATTERNS.some(pattern => pattern.test(text));
@@ -68,9 +103,6 @@ export function ChatWindow({ jobId, otherUser, currentUser }: ChatWindowProps) {
 
         if (detectSuspiciousContent(inputValue)) {
             setWarning("⚠️ Por tu seguridad y la garantía del servicio, te recomendamos no compartir datos de contacto hasta confirmar el trabajo. Si arreglás por fuera, Chambea no puede protegerte.");
-            // We don't block, just warn. The message will still be sent but flagged in DB in real app.
-            // For UX here, we might delay sending or require a second click "Send anyway".
-            // Let's implement immediate send but with toast warning + flag.
         } else {
             setWarning(null);
         }
@@ -78,19 +110,28 @@ export function ChatWindow({ jobId, otherUser, currentUser }: ChatWindowProps) {
         setIsSending(true);
 
         try {
-            // In real app:
-            // await supabase.from('messages').insert({ ... })
+            const { error } = await supabase.from('messages').insert({
+                job_id: jobId,
+                sender_id: currentUser.id,
+                receiver_id: otherUser.id,
+                content: inputValue,
+            });
 
+            if (error) throw error;
+
+            setInputValue("");
+            // Optimistic update or wait for realtime subscription
+            // For now, we rely on the realtime subscription or a manual fetch if improved later.
+            // But let's add it locally for immediate feedback
             const newMessage: Message = {
-                id: Date.now().toString(),
+                id: Date.now().toString(), // Temporary ID
                 sender_id: currentUser.id,
                 content: inputValue,
                 created_at: new Date().toISOString(),
                 flagged: detectSuspiciousContent(inputValue)
             };
-
             setMessages(prev => [...prev, newMessage]);
-            setInputValue("");
+
 
             if (newMessage.flagged) {
                 toast.warning("Mensaje enviado con advertencia", {
@@ -99,6 +140,7 @@ export function ChatWindow({ jobId, otherUser, currentUser }: ChatWindowProps) {
             }
 
         } catch (error) {
+            console.error(error);
             toast.error("Error al enviar el mensaje");
         } finally {
             setIsSending(false);

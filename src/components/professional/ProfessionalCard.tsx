@@ -110,7 +110,7 @@ export function ProfessionalCard({ professional, anonymized = false }: Professio
             {!anonymized && (
                 <CardFooter className="p-0 border-t bg-muted/10">
                     <Button variant="ghost" className="w-full rounded-t-none h-12 text-primary font-medium hover:text-primary hover:bg-primary/5" asChild>
-                        <Link href={`/profile/${professional.id}`}>
+                        <Link href={`/client/professionals/${professional.id}`}>
                             Ver perfil completo
                         </Link>
                     </Button>
