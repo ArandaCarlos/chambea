@@ -23,6 +23,7 @@ interface Job {
     address: string;
     city: string;
     client_budget_max: number | null;
+    quoted_price: number | null;
     urgency: string;
     preferred_date: string | null;
     preferred_time_slot: string | null;
@@ -273,18 +274,24 @@ export default function ClientJobDetailPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-lg">Presupuesto</CardTitle>
+                        <CardTitle className="text-lg">
+                            {job.status === 'accepted' || job.status === 'completed' || job.status === 'in_progress' ? 'Presupuesto Acordado' : 'Presupuesto'}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-2">
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                             <span className="text-2xl font-bold">
-                                {job.client_budget_max
-                                    ? `$${job.client_budget_max.toLocaleString('es-AR')}`
-                                    : 'A convenir'}
+                                {(job.status === 'accepted' || job.status === 'completed' || job.status === 'in_progress') && job.quoted_price
+                                    ? `$${job.quoted_price.toLocaleString('es-AR')}`
+                                    : job.client_budget_max
+                                        ? `$${job.client_budget_max.toLocaleString('es-AR')}`
+                                        : 'A convenir'}
                             </span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Presupuesto máximo</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            {(job.status === 'accepted' || job.status === 'completed' || job.status === 'in_progress') ? 'Monto final a pagar' : 'Presupuesto máximo'}
+                        </p>
                     </CardContent>
                 </Card>
 

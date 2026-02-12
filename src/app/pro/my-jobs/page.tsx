@@ -11,22 +11,17 @@ import { JobCard } from "@/components/job/JobCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ProfessionalMyJobsPage() {
-    const router = useRouter();
-    const supabase = createClient();
-    const [loading, setLoading] = useState(true);
-    const [jobs, setJobs] = useState<any[]>([]);
+    const [profileId, setProfileId] = useState<string | null>(null);
 
     useEffect(() => {
         loadMyJobs();
     }, []);
 
     async function loadMyJobs() {
-        console.log("Loading my jobs...");
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) {
-                console.log("No user found");
                 router.push("/login");
                 return;
             }
@@ -38,12 +33,9 @@ export default function ProfessionalMyJobsPage() {
                 .eq('user_id', user.id)
                 .single();
 
-            if (!profile) {
-                console.log("No profile found for user:", user.id);
-                return;
-            }
+            if (!profile) return;
 
-            console.log("Fetching proposals for profile:", profile.id);
+            setProfileId(profile.id);
 
             // Get proposals and related jobs
             const { data: proposals, error } = await supabase
@@ -62,18 +54,10 @@ export default function ProfessionalMyJobsPage() {
                 .eq('professional_id', profile.id)
                 .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error("Error fetching proposals:", error);
-                throw error;
-            }
-
-            console.log("Proposals found:", proposals);
+            if (error) throw error;
 
             const transformedJobs = proposals.map((p: any) => {
-                if (!p.job) {
-                    console.warn("Proposal without job data:", p);
-                    return null;
-                }
+                if (!p.job) return null;
                 return {
                     ...p.job,
                     proposal_status: p.status,
@@ -84,9 +68,7 @@ export default function ProfessionalMyJobsPage() {
                     },
                     budget: p.job.client_budget_max,
                 };
-            }).filter(Boolean); // Filter out nulls
-
-            console.log("Transformed Jobs:", transformedJobs);
+            }).filter(Boolean);
 
             setJobs(transformedJobs);
         } catch (error) {
@@ -104,20 +86,33 @@ export default function ProfessionalMyJobsPage() {
         );
     }
 
-    // Fix: Validar tanto el estado de la propuesta como el del trabajo
-    // Si la propuesta fue aceptada, el trabajo debería considerarse activo para el profesional
+    // ROBUST FILTERING LOGIC:
+    // Active if:
+    // 1. Proposal is accepted
+    // 2. OR Job's professional_id matches me (regardless of proposal status sync)
+    // 3. AND Job is not cancelled/completed (unless I finished it)
     const activeJobs = jobs.filter(j =>
-        (j.proposal_status === 'accepted') &&
-        (j.status !== 'completed' && j.status !== 'cancelled')
+        (j.proposal_status === 'accepted' || j.professional_id === profileId) &&
+        (j.status !== 'cancelled') &&
+        (j.status !== 'completed' || j.proposal_status === 'accepted') // Include completed if it was mine
     );
 
-    // Pendientes solo si la propuesta está pending Y el trabajo no fue aceptado por otro (o cancelado/completado)
+    // Pending if:
+    // 1. Proposal is pending
+    // 2. AND Job is OPEN (if it's accepted by someone else, it's not pending for me)
+    // 3. AND I am not the assigned professional (otherwise it's active)
     const pendingProposals = jobs.filter(j =>
         j.proposal_status === 'pending' &&
-        (j.status === 'open') // Hide if job is already accepted by someone else or closed
+        j.status === 'open' &&
+        j.professional_id !== profileId
     );
 
-    const completedJobs = jobs.filter(j => j.status === 'completed' && j.proposal_status === 'accepted');
+    // Completed if:
+    // Status is completed AND it was my job
+    const completedJobs = jobs.filter(j =>
+        j.status === 'completed' &&
+        (j.proposal_status === 'accepted' || j.professional_id === profileId)
+    );
 
     return (
         <div className="space-y-6">
