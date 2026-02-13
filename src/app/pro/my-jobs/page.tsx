@@ -10,7 +10,32 @@ import { createClient } from "@/lib/supabase/client";
 import { JobCard } from "@/components/job/JobCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+interface Job {
+    id: string;
+    title: string;
+    description: string;
+    status: "accepted" | "cancelled" | "completed" | "open" | "draft" | "pending_quote" | "quoted" | "in_progress" | "pending_client_approval" | "disputed" | "expired";
+    category_id: string;
+    urgency: "low" | "medium" | "high" | "emergency";
+    professional_id: string | null;
+    proposal_status: string;
+    client: {
+        full_name: string;
+        avatar_url?: string;
+    };
+    location: {
+        address: string;
+        city: string;
+    };
+    budget?: number;
+    created_at: string;
+}
+
 export default function ProfessionalMyJobsPage() {
+    const router = useRouter();
+    const supabase = createClient();
+    const [loading, setLoading] = useState(true);
+    const [jobs, setJobs] = useState<Job[]>([]);
     const [profileId, setProfileId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -64,11 +89,11 @@ export default function ProfessionalMyJobsPage() {
                     client: p.job.client || { full_name: "Cliente", avatar_url: null },
                     location: {
                         address: p.job.address,
-                        city: p.job.city,
+                        city: p.job.city || "CABA",
                     },
                     budget: p.job.client_budget_max,
-                };
-            }).filter(Boolean);
+                } as Job;
+            }).filter((job): job is Job => job !== null);
 
             setJobs(transformedJobs);
         } catch (error) {
