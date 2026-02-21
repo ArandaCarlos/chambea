@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Clock, MessageSquare, ShieldCheck, DollarSign, Loader2, RefreshCw, Calendar } from "lucide-react";
+import { ArrowLeft, Clock, ShieldCheck, Loader2, RefreshCw, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,89 @@ import { formatRelativeTime } from "@/lib/utils/dates";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+
+const BASE_SELECT = `
+    id,
+    quoted_price,
+    estimated_hours,
+    message,
+    status,
+    created_at,
+    professional:professional_id (
+        id,
+        full_name,
+        avatar_url,
+        latitude,
+        longitude,
+        identity_verified,
+        professional:professional_profiles (
+            trade,
+            hourly_rate,
+            average_rating,
+            total_reviews,
+            available_now,
+            service_areas
+        )
+    )
+`;
+
+const FULL_SELECT = `
+    id,
+    quoted_price,
+    estimated_hours,
+    message,
+    status,
+    created_at,
+    proposal_type,
+    visit_date,
+    visit_time_slot,
+    visit_cost,
+    visit_notes,
+    professional:professional_id (
+        id,
+        full_name,
+        avatar_url,
+        latitude,
+        longitude,
+        identity_verified,
+        professional:professional_profiles (
+            trade,
+            hourly_rate,
+            average_rating,
+            total_reviews,
+            available_now,
+            service_areas
+        )
+    )
+`;
+
+function mapProposal(p: any) {
+    return {
+        id: p.id,
+        quoted_price: p.quoted_price,
+        estimated_hours: p.estimated_hours,
+        message: p.message,
+        status: p.status,
+        created_at: p.created_at,
+        proposal_type: p.proposal_type || 'price',
+        visit_date: p.visit_date ?? null,
+        visit_time_slot: p.visit_time_slot ?? null,
+        visit_cost: p.visit_cost ?? null,
+        visit_notes: p.visit_notes ?? null,
+        professional: {
+            id: p.professional?.id,
+            full_name: p.professional?.full_name || 'Profesional',
+            avatar_url: p.professional?.avatar_url,
+            trade: p.professional?.professional?.trade || 'general',
+            hourly_rate: p.professional?.professional?.hourly_rate || 0,
+            rating: p.professional?.professional?.average_rating || 0,
+            reviews_count: p.professional?.professional?.total_reviews || 0,
+            is_verified: p.professional?.identity_verified || false,
+            available_now: p.professional?.professional?.available_now || false,
+            location: { city: "CABA", distance: undefined }
+        }
+    };
+}
 
 export default function JobProposalsPage() {
     const params = useParams();
@@ -32,7 +115,7 @@ export default function JobProposalsPage() {
     async function fetchProposals(id: string) {
         setLoading(true);
         try {
-            // Get Job Status First
+            // Get Job Status
             const { data: job, error: jobError } = await supabase
                 .from('jobs')
                 .select('status, professional_id')
@@ -42,70 +125,32 @@ export default function JobProposalsPage() {
             if (jobError) throw jobError;
             setJobStatus(job.status);
 
-            // Get Proposals with Professional Data
-            const { data, error } = await supabase
+            // Try full query (with visit columns added by Step 1 SQL)
+            // Fall back to base query if those columns don't exist yet
+            let rawProposals: any[] = [];
+
+            const fullResult = await supabase
                 .from('proposals')
-                .select(`
-                    id,
-                    quoted_price,
-                    estimated_hours,
-                    message,
-                    status,
-                    created_at,
-                    proposal_type,
-                    visit_date,
-                    visit_time_slot,
-                    visit_cost,
-                    visit_notes,
-                    professional:professional_id (
-                        id,
-                        full_name,
-                        avatar_url,
-                        latitude,
-                        longitude,
-                        identity_verified,
-                        professional:professional_profiles (
-                            trade,
-                            hourly_rate,
-                            average_rating,
-                            total_reviews,
-                            available_now,
-                            service_areas
-                        )
-                    )
-                `)
+                .select(FULL_SELECT)
                 .eq('job_id', id)
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (!fullResult.error) {
+                rawProposals = fullResult.data || [];
+            } else {
+                // Fallback: columns from Step 1 SQL don't exist yet
+                console.warn('Full proposal query failed, using base query:', fullResult.error.message);
+                const baseResult = await supabase
+                    .from('proposals')
+                    .select(BASE_SELECT)
+                    .eq('job_id', id)
+                    .order('created_at', { ascending: false });
 
-            // Map safely — optional chaining everywhere to survive null professional_profiles
-            const mappedProposals = (data || []).map((p: any) => ({
-                id: p.id,
-                quoted_price: p.quoted_price,
-                estimated_hours: p.estimated_hours,
-                message: p.message,
-                status: p.status,
-                created_at: p.created_at,
-                proposal_type: p.proposal_type || 'price',
-                visit_date: p.visit_date,
-                visit_time_slot: p.visit_time_slot,
-                visit_cost: p.visit_cost,
-                visit_notes: p.visit_notes,
-                professional: {
-                    id: p.professional?.id,
-                    full_name: p.professional?.full_name || 'Profesional',
-                    avatar_url: p.professional?.avatar_url,
-                    trade: p.professional?.professional?.trade || 'general',
-                    hourly_rate: p.professional?.professional?.hourly_rate || 0,
-                    rating: p.professional?.professional?.average_rating || 0,
-                    reviews_count: p.professional?.professional?.total_reviews || 0,
-                    is_verified: p.professional?.identity_verified || false,
-                    available_now: p.professional?.professional?.available_now || false,
-                    location: { city: "CABA", distance: undefined }
-                }
-            }));
+                if (baseResult.error) throw baseResult.error;
+                rawProposals = baseResult.data || [];
+            }
 
+            const mappedProposals = rawProposals.map(mapProposal);
             setProposals(mappedProposals);
 
             const accepted = mappedProposals.find(p => p.status === 'accepted');
@@ -130,11 +175,7 @@ export default function JobProposalsPage() {
 
                 const { error: jobError } = await supabase
                     .from('jobs')
-                    .update({
-                        status: 'accepted',
-                        professional_id: professionalId,
-                        quoted_price: price
-                    })
+                    .update({ status: 'accepted', professional_id: professionalId, quoted_price: price })
                     .eq('id', jobId);
                 if (jobError) throw jobError;
 
@@ -160,10 +201,7 @@ export default function JobProposalsPage() {
 
                 const { error: jobError } = await supabase
                     .from('jobs')
-                    .update({
-                        status: 'visit_scheduled',
-                        professional_id: professionalId,
-                    })
+                    .update({ status: 'visit_scheduled', professional_id: professionalId })
                     .eq('id', jobId);
                 if (jobError) throw jobError;
 
@@ -225,6 +263,7 @@ export default function JobProposalsPage() {
                             <Card className={`border-l-4 border-transparent transition-all ${isAccepted ? 'border-green-500 ring-1 ring-green-500 bg-green-50/10' : 'hover:border-primary'}`}>
                                 <CardContent className="p-6">
                                     <div className="flex flex-col md:flex-row gap-6">
+
                                         {/* Professional Info */}
                                         <div className="w-full md:w-80 flex-shrink-0">
                                             <ProfessionalCard
@@ -250,29 +289,24 @@ export default function JobProposalsPage() {
                                         <div className="flex-1 space-y-4">
                                             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                                 <div>
-                                                    {/* VISIT proposal header */}
                                                     {isVisitProposal ? (
                                                         <div>
                                                             <h3 className="font-semibold text-lg flex items-center gap-2">
                                                                 <Calendar className="w-4 h-4 text-amber-500" />
-                                                                Propone una visita técnica
+                                                                Propone visita técnica
                                                                 <Badge variant="secondary" className="font-normal text-xs bg-amber-100 text-amber-800">
                                                                     Sin precio aún
                                                                 </Badge>
                                                             </h3>
                                                             {proposal.visit_date && (
                                                                 <p className="text-sm text-muted-foreground mt-1">
-                                                                    Fecha: {new Date(proposal.visit_date).toLocaleDateString('es-AR')} — {proposal.visit_time_slot}
+                                                                    {new Date(proposal.visit_date).toLocaleDateString('es-AR')} — {proposal.visit_time_slot}
                                                                 </p>
                                                             )}
-                                                            {proposal.visit_cost > 0 && (
-                                                                <p className="text-sm text-muted-foreground">
-                                                                    Costo de visita: ${proposal.visit_cost?.toLocaleString()}
-                                                                </p>
-                                                            )}
-                                                            {proposal.visit_cost === 0 && (
-                                                                <p className="text-sm text-green-600 font-medium">Visita sin costo</p>
-                                                            )}
+                                                            {proposal.visit_cost === 0
+                                                                ? <p className="text-sm text-green-600 font-medium">Visita sin costo</p>
+                                                                : proposal.visit_cost > 0 && <p className="text-sm text-muted-foreground">Costo: ${proposal.visit_cost?.toLocaleString()}</p>
+                                                            }
                                                         </div>
                                                     ) : (
                                                         <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -307,7 +341,8 @@ export default function JobProposalsPage() {
 
                                                 {isAccepted && (
                                                     <Button disabled variant="outline" className="text-green-600 border-green-200 bg-green-50">
-                                                        <ShieldCheck className="w-4 h-4 mr-2" /> {isVisitProposal ? 'Visita Confirmada' : 'Contratado'}
+                                                        <ShieldCheck className="w-4 h-4 mr-2" />
+                                                        {isVisitProposal ? 'Visita Confirmada' : 'Contratado'}
                                                     </Button>
                                                 )}
                                             </div>
