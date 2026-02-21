@@ -5,12 +5,15 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, MessageSquare, User, CheckCircle } from "lucide-react";
+import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, MessageSquare, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
+import { ProposalForm } from "@/components/proposal/ProposalForm";
+
+export const dynamic = "force-dynamic";
 
 export default function ProfessionalJobManagePage() {
     const router = useRouter();
@@ -32,7 +35,7 @@ export default function ProfessionalJobManagePage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return router.push('/login');
 
-            // Fetch Job + Client + Proposal Status
+            // Fetch Job details
             const { data: jobData, error } = await supabase
                 .from('jobs')
                 .select(`
@@ -50,21 +53,23 @@ export default function ProfessionalJobManagePage() {
 
             if (error) throw error;
 
-            // Verify if this pro is the one hired OR has a proposal
+            // Get the professional's profile id
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .single();
+
+            // Check if this pro already has a proposal (null is OK — they haven't proposed yet)
             const { data: proposal } = await supabase
                 .from('proposals')
                 .select('status')
                 .eq('job_id', id)
-                .eq('professional_id', (await supabase.from('profiles').select('id').eq('user_id', user.id).single()).data?.id)
-                .single();
+                .eq('professional_id', profile?.id)
+                .maybeSingle();
 
-            if (!proposal) {
-                toast.error("No tienes acceso a este trabajo");
-                router.push("/pro/my-jobs");
-                return;
-            }
-
-            setJob({ ...jobData, proposal_status: proposal.status });
+            // proposal_status = null means they can still submit a proposal
+            setJob({ ...jobData, proposal_status: proposal?.status ?? null });
 
         } catch (error) {
             console.error(error);
@@ -78,13 +83,15 @@ export default function ProfessionalJobManagePage() {
     if (!job) return <div>Trabajo no encontrado</div>;
 
     const isAccepted = job.proposal_status === 'accepted';
+    const hasProposal = job.proposal_status !== null;
+    const isOpenForBidding = !hasProposal && job.status === 'open';
 
     return (
         <div className="space-y-6 max-w-4xl">
             <Button variant="ghost" size="sm" asChild>
-                <Link href="/pro/my-jobs">
+                <Link href="/pro/browse-jobs">
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    Volver
+                    Volver a trabajos
                 </Link>
             </Button>
 
@@ -93,7 +100,11 @@ export default function ProfessionalJobManagePage() {
                     <h1 className="text-3xl font-bold">{job.title}</h1>
                     <div className="flex items-center gap-2">
                         <Badge variant={isAccepted ? "secondary" : "outline"}>
-                            {isAccepted ? "Trabajo Aceptado" : "Postulación Pendiente"}
+                            {isAccepted
+                                ? "Trabajo Aceptado"
+                                : hasProposal
+                                    ? "Postulación Pendiente"
+                                    : "Sin postulación"}
                         </Badge>
                     </div>
                 </div>
@@ -135,6 +146,7 @@ export default function ProfessionalJobManagePage() {
                 </Card>
             )}
 
+            {/* Job Details */}
             <Card>
                 <CardHeader>
                     <CardTitle>Detalles del Trabajo</CardTitle>
@@ -176,6 +188,25 @@ export default function ProfessionalJobManagePage() {
                                 />
                             ))}
                         </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* ProposalForm: only show if job is open and pro hasn't proposed yet */}
+            {isOpenForBidding && (
+                <ProposalForm jobId={job.id} />
+            )}
+
+            {/* Message for pros who already proposed but aren't accepted yet */}
+            {hasProposal && !isAccepted && (
+                <Card className="border-muted bg-muted/30">
+                    <CardContent className="py-6 text-center">
+                        <p className="text-muted-foreground">
+                            Ya enviaste una propuesta para este trabajo. El cliente la está revisando.
+                        </p>
+                        <Button variant="outline" className="mt-4" onClick={() => router.push("/pro/my-jobs")}>
+                            Ver mis postulaciones
+                        </Button>
                     </CardContent>
                 </Card>
             )}
