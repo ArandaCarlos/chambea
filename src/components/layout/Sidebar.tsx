@@ -92,7 +92,7 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
             </div>
 
             <div className="absolute bottom-4 left-0 w-full px-3">
-                <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50">
+                <Button variant="ghost" className="justify-start text-red-500 hover:text-red-600 hover:bg-red-50">
                     <LogOut className="mr-2 h-4 w-4" />
                     Cerrar Sesión
                 </Button>
