@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Clock, MessageSquare, ShieldCheck, DollarSign, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Clock, MessageSquare, ShieldCheck, DollarSign, Loader2, RefreshCw, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ProfessionalCard } from "@/components/professional/ProfessionalCard";
 import { formatRelativeTime } from "@/lib/utils/dates";
@@ -42,9 +41,6 @@ export default function JobProposalsPage() {
 
             if (jobError) throw jobError;
             setJobStatus(job.status);
-            if (job.status === 'accepted' || job.status === 'in_progress' || job.status === 'completed') {
-                // If job is already assigned, find which proposal corresponds
-            }
 
             // Get Proposals with Professional Data
             const { data, error } = await supabase
@@ -56,6 +52,11 @@ export default function JobProposalsPage() {
                     message,
                     status,
                     created_at,
+                    proposal_type,
+                    visit_date,
+                    visit_time_slot,
+                    visit_cost,
+                    visit_notes,
                     professional:professional_id (
                         id,
                         full_name,
@@ -78,44 +79,40 @@ export default function JobProposalsPage() {
 
             if (error) throw error;
 
-            // Map data to match UI expectations
-            const mappedProposals = data?.map((p: any) => ({
+            // Map safely — optional chaining everywhere to survive null professional_profiles
+            const mappedProposals = (data || []).map((p: any) => ({
                 id: p.id,
                 quoted_price: p.quoted_price,
                 estimated_hours: p.estimated_hours,
                 message: p.message,
                 status: p.status,
                 created_at: p.created_at,
+                proposal_type: p.proposal_type || 'price',
+                visit_date: p.visit_date,
+                visit_time_slot: p.visit_time_slot,
+                visit_cost: p.visit_cost,
+                visit_notes: p.visit_notes,
                 professional: {
-                    id: p.professional.id,
-                    full_name: p.professional.full_name,
-                    avatar_url: p.professional.avatar_url,
-
-                    // Professional Profile Data
-                    trade: p.professional.professional?.trade || 'general',
-                    hourly_rate: p.professional.professional?.hourly_rate || 0,
-                    rating: p.professional.professional?.average_rating || 0,
-                    reviews_count: p.professional.professional?.total_reviews || 0,
-                    is_verified: p.professional.identity_verified || false,
-                    available_now: p.professional.professional?.available_now || false,
-
-                    location: {
-                        city: "CABA", // Placeholder or calculate from coords if needed
-                        distance: undefined // Would need user lat/long to calculate
-                    }
+                    id: p.professional?.id,
+                    full_name: p.professional?.full_name || 'Profesional',
+                    avatar_url: p.professional?.avatar_url,
+                    trade: p.professional?.professional?.trade || 'general',
+                    hourly_rate: p.professional?.professional?.hourly_rate || 0,
+                    rating: p.professional?.professional?.average_rating || 0,
+                    reviews_count: p.professional?.professional?.total_reviews || 0,
+                    is_verified: p.professional?.identity_verified || false,
+                    available_now: p.professional?.professional?.available_now || false,
+                    location: { city: "CABA", distance: undefined }
                 }
             }));
 
-            setProposals(mappedProposals || []);
+            setProposals(mappedProposals);
 
-            // Check if any is accepted
-            const accepted = mappedProposals?.find(p => p.status === 'accepted');
-            if (accepted) {
-                setAcceptedProposalId(accepted.id);
-            }
+            const accepted = mappedProposals.find(p => p.status === 'accepted');
+            if (accepted) setAcceptedProposalId(accepted.id);
 
         } catch (error) {
-            console.error(error);
+            console.error('Error fetching proposals:', error);
             toast.error("Error al cargar propuestas");
         } finally {
             setLoading(false);
@@ -123,39 +120,60 @@ export default function JobProposalsPage() {
     }
 
     const handleAccept = async (proposalId: string, professionalId: string, price: number) => {
-        // Simulate Payment Flow for MVP
         toast.promise(
             async () => {
-                // 1. Update Proposal Status
                 const { error: propError } = await supabase
                     .from('proposals')
                     .update({ status: 'accepted' })
                     .eq('id', proposalId);
-
                 if (propError) throw propError;
 
-                // 2. Reject other proposals? (Optional logic, maybe 'withdrawn' or just leave pending)
-
-                // 3. Update Job Status
                 const { error: jobError } = await supabase
                     .from('jobs')
                     .update({
                         status: 'accepted',
                         professional_id: professionalId,
                         quoted_price: price
-                        // accepted_at removed as column does not exist
                     })
                     .eq('id', jobId);
-
                 if (jobError) throw jobError;
 
                 setAcceptedProposalId(proposalId);
-                if (jobId) fetchProposals(jobId); // Refresh to see contact info
+                if (jobId) fetchProposals(jobId);
             },
             {
-                loading: 'Procesando pago y contratación...',
+                loading: 'Procesando contratación...',
                 success: '¡Contratación exitosa! Datos de contacto liberados.',
                 error: 'Error al procesar la contratación',
+            }
+        );
+    };
+
+    const handleConfirmVisit = async (proposalId: string, professionalId: string) => {
+        toast.promise(
+            async () => {
+                const { error: propError } = await supabase
+                    .from('proposals')
+                    .update({ status: 'accepted' })
+                    .eq('id', proposalId);
+                if (propError) throw propError;
+
+                const { error: jobError } = await supabase
+                    .from('jobs')
+                    .update({
+                        status: 'visit_scheduled',
+                        professional_id: professionalId,
+                    })
+                    .eq('id', jobId);
+                if (jobError) throw jobError;
+
+                setAcceptedProposalId(proposalId);
+                if (jobId) fetchProposals(jobId);
+            },
+            {
+                loading: 'Confirmando visita...',
+                success: '¡Visita confirmada! El profesional fue notificado.',
+                error: 'Error al confirmar la visita',
             }
         );
     };
@@ -197,8 +215,9 @@ export default function JobProposalsPage() {
                 {proposals.map((proposal) => {
                     const isAccepted = acceptedProposalId === proposal.id;
                     const isOtherAccepted = acceptedProposalId !== null && !isAccepted;
+                    const isVisitProposal = proposal.proposal_type === 'visit';
 
-                    if (isOtherAccepted) return null; // Hide others if one is accepted (optional UI choice)
+                    if (isOtherAccepted) return null;
 
                     return (
                         <div key={proposal.id} className="relative group">
@@ -231,36 +250,79 @@ export default function JobProposalsPage() {
                                         <div className="flex-1 space-y-4">
                                             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                                 <div>
-                                                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                                                        Presupuesto: ${proposal.quoted_price.toLocaleString()}
-                                                        <Badge variant="secondary" className="font-normal text-xs">
-                                                            Por el trabajo completo
-                                                        </Badge>
-                                                    </h3>
+                                                    {/* VISIT proposal header */}
+                                                    {isVisitProposal ? (
+                                                        <div>
+                                                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                                <Calendar className="w-4 h-4 text-amber-500" />
+                                                                Propone una visita técnica
+                                                                <Badge variant="secondary" className="font-normal text-xs bg-amber-100 text-amber-800">
+                                                                    Sin precio aún
+                                                                </Badge>
+                                                            </h3>
+                                                            {proposal.visit_date && (
+                                                                <p className="text-sm text-muted-foreground mt-1">
+                                                                    Fecha: {new Date(proposal.visit_date).toLocaleDateString('es-AR')} — {proposal.visit_time_slot}
+                                                                </p>
+                                                            )}
+                                                            {proposal.visit_cost > 0 && (
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    Costo de visita: ${proposal.visit_cost?.toLocaleString()}
+                                                                </p>
+                                                            )}
+                                                            {proposal.visit_cost === 0 && (
+                                                                <p className="text-sm text-green-600 font-medium">Visita sin costo</p>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                            Presupuesto: ${proposal.quoted_price?.toLocaleString()}
+                                                            <Badge variant="secondary" className="font-normal text-xs">
+                                                                Por el trabajo completo
+                                                            </Badge>
+                                                        </h3>
+                                                    )}
                                                     <p className="text-sm text-muted-foreground mt-1">
                                                         <Clock className="w-3.5 h-3.5 inline mr-1" />
                                                         Recibida {formatRelativeTime(proposal.created_at)}
                                                     </p>
                                                 </div>
 
+                                                {/* Action buttons */}
                                                 {!isAccepted && !acceptedProposalId && (
-                                                    <Button onClick={() => handleAccept(proposal.id, proposal.professional.id, proposal.quoted_price)}>
-                                                        Contratar
-                                                    </Button>
+                                                    isVisitProposal ? (
+                                                        <Button
+                                                            onClick={() => handleConfirmVisit(proposal.id, proposal.professional.id)}
+                                                            className="bg-amber-500 hover:bg-amber-600"
+                                                        >
+                                                            <Calendar className="w-4 h-4 mr-2" />
+                                                            Confirmar Visita
+                                                        </Button>
+                                                    ) : (
+                                                        <Button onClick={() => handleAccept(proposal.id, proposal.professional.id, proposal.quoted_price)}>
+                                                            Contratar
+                                                        </Button>
+                                                    )
                                                 )}
 
                                                 {isAccepted && (
                                                     <Button disabled variant="outline" className="text-green-600 border-green-200 bg-green-50">
-                                                        <ShieldCheck className="w-4 h-4 mr-2" /> Contratado
+                                                        <ShieldCheck className="w-4 h-4 mr-2" /> {isVisitProposal ? 'Visita Confirmada' : 'Contratado'}
                                                     </Button>
                                                 )}
                                             </div>
 
                                             <div className="bg-muted/30 p-4 rounded-lg">
                                                 <p className="text-sm italic">"{proposal.message}"</p>
+                                                {isVisitProposal && proposal.visit_notes && (
+                                                    <div className="mt-2 pt-2 border-t border-border">
+                                                        <p className="text-xs text-muted-foreground font-medium">Evaluará:</p>
+                                                        <p className="text-sm">{proposal.visit_notes}</p>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {proposal.estimated_hours && (
+                                            {proposal.estimated_hours && !isVisitProposal && (
                                                 <div className="text-sm text-muted-foreground">
                                                     Tiempo estimado: {proposal.estimated_hours} horas
                                                 </div>
