@@ -62,9 +62,9 @@ export default function ProfessionalJobManagePage() {
         }
     }
 
-    function getStatusLabel() {
-        if (!job) return "";
-        const map: Record<string, { label: string; variant: any; color: string }> = {
+    function getStatusLabel(): { label: string; variant: "default" | "secondary" | "outline" | "destructive"; color: string } {
+        if (!job) return { label: "", variant: "outline", color: "" };
+        const map: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive"; color: string }> = {
             open: { label: "Abierto", variant: "outline", color: "" },
             visit_scheduled: { label: "Visita Agendada", variant: "secondary", color: "bg-amber-100 text-amber-800 border-amber-200" },
             quoted: { label: "Presupuesto Enviado", variant: "secondary", color: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -72,7 +72,7 @@ export default function ProfessionalJobManagePage() {
             in_progress: { label: "En Progreso", variant: "secondary", color: "" },
             completed: { label: "Completado", variant: "outline", color: "" },
         };
-        return map[job.status] || { label: job.status, variant: "outline", color: "" };
+        return map[job.status] ?? { label: job.status, variant: "outline", color: "" };
     }
 
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="animate-spin" /></div>;
