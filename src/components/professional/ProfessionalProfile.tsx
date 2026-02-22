@@ -4,10 +4,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { JOB_CATEGORIES } from "@/lib/constants/job-categories";
 import { Star, MapPin, ShieldCheck, CheckCircle2, Clock } from "lucide-react";
 import Image from "next/image";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
+import Link from "next/link";
+
+interface Review {
+    id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    reviewer: { full_name: string; avatar_url?: string } | null;
+}
 
 interface ProfessionalProfileProps {
     profile: {
@@ -16,9 +26,7 @@ interface ProfessionalProfileProps {
         avatar_url?: string;
         bio?: string;
         city: string;
-        // Pro details
         trade: string;
-        subcategories?: string[];
         hourly_rate: number;
         rating: number;
         reviews_count: number;
@@ -26,16 +34,29 @@ interface ProfessionalProfileProps {
         is_verified: boolean;
         available_now: boolean;
         portfolio_photos?: string[];
-        badges?: string[];
     };
+    reviews?: Review[];
 }
 
-export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
+function StarRow({ rating }: { rating: number }) {
+    return (
+        <div className="flex gap-0.5">
+            {[1, 2, 3, 4, 5].map(s => (
+                <Star
+                    key={s}
+                    className={`w-4 h-4 ${s <= rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/20"}`}
+                />
+            ))}
+        </div>
+    );
+}
+
+export function ProfessionalProfile({ profile, reviews = [] }: ProfessionalProfileProps) {
     const category = JOB_CATEGORIES.find(c => c.id === profile.trade);
 
     return (
         <div className="space-y-8">
-            {/* Header Profile */}
+            {/* Header */}
             <div className="bg-card rounded-xl p-6 shadow-sm border space-y-6 md:space-y-0 md:flex md:gap-8">
                 <div className="flex-shrink-0 flex justify-center md:block">
                     <div className="relative">
@@ -68,7 +89,7 @@ export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
                     <div className="flex flex-wrap justify-center md:justify-start gap-6 py-2">
                         <div className="text-center md:text-left">
                             <div className="flex items-center justify-center md:justify-start gap-1 font-bold text-xl">
-                                {profile.rating.toFixed(1)} <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                                {Number(profile.rating).toFixed(1)} <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                             </div>
                             <p className="text-xs text-muted-foreground">{profile.reviews_count} reseñas</p>
                         </div>
@@ -76,9 +97,7 @@ export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
                         <div className="w-px bg-border h-10" />
 
                         <div className="text-center md:text-left">
-                            <div className="font-bold text-xl">
-                                {profile.completed_jobs}
-                            </div>
+                            <div className="font-bold text-xl">{profile.completed_jobs}</div>
                             <p className="text-xs text-muted-foreground">Trabajos hechos</p>
                         </div>
 
@@ -86,71 +105,98 @@ export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
 
                         <div className="text-center md:text-left">
                             <div className="font-bold text-xl text-green-600">
-                                ${profile.hourly_rate}
+                                ${profile.hourly_rate?.toLocaleString('es-AR') || '—'}
                             </div>
                             <p className="text-xs text-muted-foreground">Hora estimada</p>
                         </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                        <Button size="lg" className="flex-1 sm:flex-none">
-                            Contactar
-                        </Button>
-                        <Button variant="outline" size="lg" className="flex-1 sm:flex-none">
-                            Solicitar Presupuesto
+                        <Button size="lg" className="flex-1 sm:flex-none" asChild>
+                            <Link href={`/client/post-job?pro=${profile.id}`}>Solicitar trabajo</Link>
                         </Button>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Main Content */}
+                {/* Main content */}
                 <div className="md:col-span-2 space-y-6">
+                    {/* Bio */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Sobre mí</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Sobre mí</CardTitle></CardHeader>
                         <CardContent>
-                            <p className="whitespace-pre-wrap leading-relaxed">
+                            <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
                                 {profile.bio || "Este profesional aún no ha agregado una descripción."}
                             </p>
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Portafolio</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {profile.portfolio_photos && profile.portfolio_photos.length > 0 ? (
+                    {/* Portfolio */}
+                    {profile.portfolio_photos && profile.portfolio_photos.length > 0 && (
+                        <Card>
+                            <CardHeader><CardTitle>Portfolio</CardTitle></CardHeader>
+                            <CardContent>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     {profile.portfolio_photos.map((photo, i) => (
                                         <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-muted hover:opacity-90 transition-opacity cursor-pointer">
-                                            <Image
-                                                src={photo}
-                                                alt={`Portfolio ${i}`}
-                                                fill
-                                                className="object-cover"
-                                            />
+                                            <Image src={photo} alt={`Portfolio ${i}`} fill className="object-cover" />
                                         </div>
                                     ))}
                                 </div>
-                            ) : (
-                                <p className="text-muted-foreground text-center py-8">
-                                    Sin fotos de trabajos previos aún.
-                                </p>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
 
+                    {/* Reviews */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Reseñas</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                Reseñas
+                                {reviews.length > 0 && (
+                                    <Badge variant="secondary">{reviews.length}</Badge>
+                                )}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-muted-foreground text-center py-8 bg-muted/20 rounded-lg">
-                                (Componente de reseñas pendiente de implementación)
-                            </p>
+                            {reviews.length === 0 ? (
+                                <p className="text-muted-foreground text-center py-8">
+                                    Todavía no hay reseñas para este profesional.
+                                </p>
+                            ) : (
+                                <div className="space-y-5">
+                                    {reviews.map((review) => (
+                                        <div key={review.id} className="space-y-2">
+                                            <div className="flex items-start gap-3">
+                                                <Avatar className="w-9 h-9 flex-shrink-0">
+                                                    <AvatarImage src={review.reviewer?.avatar_url} />
+                                                    <AvatarFallback>
+                                                        {review.reviewer?.full_name?.[0] ?? "?"}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-medium text-sm">
+                                                            {review.reviewer?.full_name ?? "Cliente"}
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatDistanceToNow(new Date(review.created_at), { addSuffix: true, locale: es })}
+                                                        </span>
+                                                    </div>
+                                                    <StarRow rating={review.rating} />
+                                                    {review.comment && (
+                                                        <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                                                            {review.comment}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {/* Separator between reviews */}
+                                            <div className="border-b last:border-0 pt-2" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -158,9 +204,7 @@ export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
                 {/* Sidebar */}
                 <div className="space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Disponibilidad</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Disponibilidad</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                             {profile.available_now ? (
                                 <div className="flex items-center gap-2 text-green-600 bg-green-50 p-3 rounded-lg border border-green-100">
@@ -176,34 +220,19 @@ export function ProfessionalProfile({ profile }: ProfessionalProfileProps) {
                                     <span>No disponible ahora</span>
                                 </div>
                             )}
-
-                            <div className="text-sm">
-                                <p className="font-medium mb-2">Responde usualmente en:</p>
-                                <p className="text-muted-foreground">~ 15 minutos</p>
-                            </div>
                         </CardContent>
                     </Card>
 
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Verificaciones</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Verificaciones</CardTitle></CardHeader>
                         <CardContent className="space-y-3">
-                            <div className="flex items-center gap-2 text-sm">
-                                <CheckCircle2 className={`w-5 h-5 ${profile.is_verified ? 'text-green-500' : 'text-muted-foreground'}`} />
-                                <span>Identidad verificada</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className={`flex items-center gap-2 text-sm ${profile.is_verified ? 'text-green-600' : 'text-muted-foreground'}`}>
                                 <CheckCircle2 className="w-5 h-5" />
-                                <span>Matrícula profesional</span>
+                                <span>Identidad {profile.is_verified ? 'verificada' : 'sin verificar'}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-green-500">
                                 <CheckCircle2 className="w-5 h-5" />
                                 <span>Email verificado</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-green-500">
-                                <CheckCircle2 className="w-5 h-5" />
-                                <span>Teléfono verificado</span>
                             </div>
                         </CardContent>
                     </Card>

@@ -12,7 +12,8 @@ import {
     Settings,
     LogOut,
     CreditCard,
-    ShieldAlert
+    ShieldAlert,
+    Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -49,6 +50,7 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
         { href: "/pro/browse-jobs", label: "Trabajos Disponibles", icon: Search },
         { href: "/pro/my-jobs", label: "Mis Trabajos", icon: Briefcase },
         { href: "/pro/earnings", label: "Ganancias", icon: CreditCard },
+        { href: "/pro/reviews", label: "Mis Reseñas", icon: Star },
     ];
 
     const adminLinks = [

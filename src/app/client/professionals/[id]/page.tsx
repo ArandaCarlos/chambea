@@ -12,25 +12,21 @@ export default function ProfessionalPage() {
     const router = useRouter();
     const supabase = createClient();
     const [profile, setProfile] = useState<any | null>(null);
+    const [reviews, setReviews] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const professionalId = params?.id ? String(params.id) : null;
 
     useEffect(() => {
-        if (professionalId) {
-            loadProfessional(professionalId);
-        }
+        if (professionalId) loadProfessional(professionalId);
     }, [professionalId]);
 
     async function loadProfessional(id: string) {
         try {
-            // Fetch basic profile + professional profile
+            // Basic profile + professional_profiles (has completed_jobs, avg_rating from triggers)
             const { data, error } = await supabase
                 .from('profiles')
-                .select(`
-                    *,
-                    professional:professional_profiles(*)
-                `)
+                .select(`*, professional:professional_profiles(*)`)
                 .eq('id', id)
                 .single();
 
@@ -42,22 +38,36 @@ export default function ProfessionalPage() {
                 return;
             }
 
-            // Transform to component format
+            // Fetch real reviews with reviewer name
+            const { data: reviewsData } = await supabase
+                .from('reviews')
+                .select(`
+                    id,
+                    rating,
+                    comment,
+                    created_at,
+                    reviewer:reviewer_id(full_name, avatar_url)
+                `)
+                .eq('reviewee_id', id)
+                .eq('review_type', 'client_to_professional')
+                .order('created_at', { ascending: false });
+
+            setReviews(reviewsData || []);
+
             const transformedProfile = {
                 id: data.id,
                 full_name: data.full_name,
                 avatar_url: data.avatar_url,
-                bio: data.bio || "Este profesional aún no ha agregado una descripción.",
+                bio: data.bio || "",
                 city: data.city || "Ubicación no disponible",
                 trade: data.professional.trade,
                 hourly_rate: data.professional.hourly_rate,
                 rating: data.professional.average_rating || 0,
                 reviews_count: data.professional.total_reviews || 0,
-                completed_jobs: 0, // Need to count from jobs table if needed
+                completed_jobs: data.professional.completed_jobs || 0, // ✅ from trigger
                 is_verified: data.identity_verified,
                 available_now: data.professional.available_now,
                 portfolio_photos: data.professional.portfolio_photos || [],
-                badges: data.professional.badges || []
             };
 
             setProfile(transformedProfile);
@@ -81,5 +91,5 @@ export default function ProfessionalPage() {
 
     if (!profile) return null;
 
-    return <ProfessionalProfile profile={profile} />;
+    return <ProfessionalProfile profile={profile} reviews={reviews} />;
 }
