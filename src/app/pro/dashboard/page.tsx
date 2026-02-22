@@ -88,36 +88,47 @@ export default function ProfessionalDashboard() {
 
             setNearbyJobs(transformedJobs);
 
-            // Count my active jobs (accepted proposals)
+            // Active jobs: jobs where this pro is hired and still in progress
             const { count: activeCount } = await supabase
-                .from('proposals')
+                .from('jobs')
                 .select('*', { count: 'exact', head: true })
                 .eq('professional_id', profileData.id)
-                .eq('status', 'accepted');
+                .in('status', ['accepted', 'in_progress']);
 
-            // Count pending proposals
+            // Pending proposals (pro sent, waiting for client decision)
             const { count: pendingCount } = await supabase
                 .from('proposals')
                 .select('*', { count: 'exact', head: true })
                 .eq('professional_id', profileData.id)
                 .eq('status', 'pending');
 
-            // Get average rating (if reviews exist)
-            const { data: ratingsData } = await supabase
-                .from('reviews')
-                .select('rating')
-                .eq('professional_id', profileData.id);
+            // Rating from professional_profiles (kept updated by trigger)
+            const { data: proProfile } = await supabase
+                .from('professional_profiles')
+                .select('average_rating, total_reviews')
+                .eq('profile_id', profileData.id)
+                .maybeSingle();
 
-            const avgRating = ratingsData && ratingsData.length > 0
-                ? ratingsData.reduce((acc, r) => acc + r.rating, 0) / ratingsData.length
-                : 0;
+            // Monthly earnings: sum of completed jobs this month
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const { data: completedThisMonth } = await supabase
+                .from('jobs')
+                .select('quoted_price, client_budget_max')
+                .eq('professional_id', profileData.id)
+                .eq('status', 'completed')
+                .gte('completed_at', monthStart);
+
+            const monthlyEarnings = (completedThisMonth || []).reduce((sum: number, j: any) => {
+                return sum + ((j.quoted_price || j.client_budget_max || 0) * 0.9); // 10% commission
+            }, 0);
 
             setStats({
                 activeJobs: activeCount || 0,
                 pendingProposals: pendingCount || 0,
-                monthlyEarnings: 0, // TODO: Calculate from transactions
-                rating: Math.round(avgRating * 10) / 10,
-                profileViews: 0, // TODO: Implement view tracking
+                monthlyEarnings: Math.round(monthlyEarnings),
+                rating: proProfile?.average_rating || 0,
+                profileViews: 0,
             });
 
         } catch (error) {
