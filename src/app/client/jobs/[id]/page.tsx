@@ -285,7 +285,7 @@ export default function ClientJobDetailPage() {
                                 <p className="text-sm text-muted-foreground">{job.professional.phone || "Teléfono no disponible"}</p>
                             </div>
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 flex-wrap">
                             <Button className="flex-1 bg-green-600 hover:bg-green-700" asChild>
                                 <Link href={`/client/messages?job=${job.id}&pro=${job.professional.id}`}>
                                     <MessageSquare className="mr-2 h-4 w-4" /> Chatear
@@ -297,6 +297,17 @@ export default function ClientJobDetailPage() {
                                 </Link>
                             </Button>
                         </div>
+                        {job.status === 'accepted' && (
+                            <Button
+                                className="w-full mt-3 bg-primary/90 hover:bg-primary"
+                                asChild
+                            >
+                                <Link href={`/client/jobs/${job.id}/complete`}>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Marcar como completado y calificar
+                                </Link>
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             )}
