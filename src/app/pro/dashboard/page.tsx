@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, DollarSign, Star, TrendingUp, Search, Loader2 } from "lucide-react";
+import { Briefcase, DollarSign, Star, TrendingUp, Search, Loader2, Zap } from "lucide-react";
 import { JobCard } from "@/components/job/JobCard";
 import { createClient } from "@/lib/supabase/client";
 
@@ -39,6 +39,7 @@ export default function ProfessionalDashboard() {
         rating: 0,
         profileViews: 0
     });
+    const [directRequests, setDirectRequests] = useState(0);
 
     useEffect(() => {
         loadDashboardData();
@@ -131,6 +132,15 @@ export default function ProfessionalDashboard() {
                 profileViews: 0,
             });
 
+            // Count direct (urgent) requests waiting for a quote
+            const { count: directCount } = await supabase
+                .from('jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('professional_id', profileData.id)
+                .eq('request_type', 'direct')
+                .eq('status', 'open');
+            setDirectRequests(directCount || 0);
+
         } catch (error) {
             console.error("Error loading dashboard:", error);
         } finally {
@@ -165,6 +175,24 @@ export default function ProfessionalDashboard() {
                     </Link>
                 </Button>
             </div>
+
+            {/* Urgent direct-request alert */}
+            {directRequests > 0 && (
+                <Link href="/pro/messages" className="block">
+                    <div className="flex items-center gap-3 bg-orange-50 border border-orange-300 rounded-xl px-5 py-4 hover:bg-orange-100 transition-colors cursor-pointer">
+                        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                            <Zap className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-semibold text-orange-800">
+                                {directRequests === 1 ? '1 solicitud urgente esperando respuesta' : `${directRequests} solicitudes urgentes esperando respuesta`}
+                            </p>
+                            <p className="text-sm text-orange-600">Un cliente te contactó directamente. Respondé y enviá tu presupuesto.</p>
+                        </div>
+                        <span className="text-orange-500 text-sm font-medium shrink-0">Ver mensajes →</span>
+                    </div>
+                </Link>
+            )}
 
             {/* Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

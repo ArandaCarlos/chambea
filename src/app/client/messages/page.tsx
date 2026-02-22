@@ -2,9 +2,10 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, Zap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -12,6 +13,8 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 interface Conversation {
     id: string;
     job_id: string;
+    job_status?: string;
+    request_type?: string;
     other_user: {
         id: string;
         full_name: string;
@@ -38,13 +41,8 @@ function MessagesContent() {
     async function loadConversations() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push("/login"); return; }
 
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            // Get user profile
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('id')
@@ -54,7 +52,6 @@ function MessagesContent() {
             if (!profile) return;
             setCurrentUserId(profile.id);
 
-            // Get messages where user is sender or receiver
             const { data: messages, error } = await supabase
                 .from('messages')
                 .select('*')
@@ -63,7 +60,6 @@ function MessagesContent() {
 
             if (error) throw error;
 
-            // Group by conversation (job_id + other user)
             const conversationMap = new Map<string, Conversation>();
 
             for (const msg of messages || []) {
@@ -71,21 +67,21 @@ function MessagesContent() {
                 const conversationKey = `${msg.job_id}-${otherUserId}`;
 
                 if (!conversationMap.has(conversationKey)) {
-                    // Get other user info
-                    const { data: otherUser } = await supabase
-                        .from('profiles')
-                        .select('id, full_name, avatar_url')
-                        .eq('id', otherUserId)
-                        .single();
+                    const [otherUserRes, jobRes] = await Promise.all([
+                        supabase.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single(),
+                        supabase.from('jobs').select('status, request_type').eq('id', msg.job_id).single(),
+                    ]);
 
-                    if (otherUser) {
+                    if (otherUserRes.data) {
                         conversationMap.set(conversationKey, {
                             id: conversationKey,
                             job_id: msg.job_id,
-                            other_user: otherUser,
+                            job_status: jobRes.data?.status,
+                            request_type: jobRes.data?.request_type,
+                            other_user: otherUserRes.data,
                             last_message: msg.content,
                             last_message_at: msg.created_at,
-                            unread_count: 0
+                            unread_count: 0,
                         });
                     }
                 }
@@ -94,36 +90,33 @@ function MessagesContent() {
             const loadedConversations = Array.from(conversationMap.values());
             setConversations(loadedConversations);
 
-            // Check for new conversation params
-            const jobIdParam = searchParams.get('job');
-            const proIdParam = searchParams.get('pro');
+            // Support ?jobId=&proId= from UrgentContactModal redirect
+            const jobIdParam = searchParams.get('jobId') || searchParams.get('job');
+            const proIdParam = searchParams.get('proId') || searchParams.get('pro');
 
             if (jobIdParam && proIdParam) {
-                // Check if conversation already exists
                 const existingKey = `${jobIdParam}-${proIdParam}`;
                 const existingConv = conversationMap.get(existingKey);
 
                 if (existingConv) {
                     setSelectedConversation(existingConv);
                 } else {
-                    // Create draft conversation logic
-                    // First check if profile exists to avoid errors
-                    const { data: proUser } = await supabase
-                        .from('profiles')
-                        .select('id, full_name, avatar_url')
-                        .eq('id', proIdParam)
-                        .single();
+                    const [proUserRes, jobRes] = await Promise.all([
+                        supabase.from('profiles').select('id, full_name, avatar_url').eq('id', proIdParam).single(),
+                        supabase.from('jobs').select('status, request_type').eq('id', jobIdParam).single(),
+                    ]);
 
-                    if (proUser) {
-                        const draftConv: Conversation = {
-                            id: 'draft',
+                    if (proUserRes.data) {
+                        setSelectedConversation({
+                            id: 'new',
                             job_id: jobIdParam,
-                            other_user: proUser,
+                            job_status: jobRes.data?.status,
+                            request_type: jobRes.data?.request_type,
+                            other_user: proUserRes.data,
                             last_message: '',
                             last_message_at: new Date().toISOString(),
-                            unread_count: 0
-                        };
-                        setSelectedConversation(draftConv);
+                            unread_count: 0,
+                        });
                     }
                 }
             }
@@ -146,9 +139,7 @@ function MessagesContent() {
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Mensajes</h1>
-                <p className="text-muted-foreground">
-                    Tus conversaciones con clientes y profesionales
-                </p>
+                <p className="text-muted-foreground">Tus conversaciones con profesionales</p>
             </div>
 
             {conversations.length === 0 && !selectedConversation ? (
@@ -156,31 +147,34 @@ function MessagesContent() {
                     <MessageCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No tenés mensajes todavía</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                        Cuando publiques o te postulan a trabajos, las conversaciones aparecerán acá
+                        Cuando contactes profesionales o publiques trabajos, las conversaciones aparecerán acá
                     </p>
                     <Button asChild>
-                        <Link href="/client/post-job">Publicar trabajo</Link>
+                        <Link href="/client/search">Buscar profesionales</Link>
                     </Button>
                 </Card>
             ) : selectedConversation && currentUserId ? (
                 <div className="max-w-3xl mx-auto">
-                    <Button
-                        variant="ghost"
-                        onClick={() => setSelectedConversation(null)}
-                        className="mb-4"
-                    >
+                    <Button variant="ghost" onClick={() => setSelectedConversation(null)} className="mb-4">
                         ← Volver a conversaciones
                     </Button>
-                    <div className="mb-4">
+                    <div className="mb-4 flex items-center gap-2">
                         <h2 className="text-2xl font-bold">Chat con {selectedConversation.other_user.full_name}</h2>
+                        {selectedConversation.request_type === 'direct' && (
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                                <Zap className="w-3 h-3 mr-1" /> Urgente
+                            </Badge>
+                        )}
                     </div>
                     <ChatWindow
                         jobId={selectedConversation.job_id}
-                        currentUser={{ id: currentUserId }}
+                        jobStatus={selectedConversation.job_status}
+                        requestType={selectedConversation.request_type}
+                        currentUser={{ id: currentUserId, role: "client" }}
                         otherUser={{
                             id: selectedConversation.other_user.id,
                             full_name: selectedConversation.other_user.full_name,
-                            avatar_url: selectedConversation.other_user.avatar_url || undefined
+                            avatar_url: selectedConversation.other_user.avatar_url || undefined,
                         }}
                     />
                 </div>
@@ -193,18 +187,23 @@ function MessagesContent() {
                             onClick={() => setSelectedConversation(conversation)}
                         >
                             <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                                     <span className="font-semibold text-primary">
                                         {conversation.other_user.full_name[0]}
                                     </span>
                                 </div>
-                                <div className="flex-1">
-                                    <h3 className="font-semibold">{conversation.other_user.full_name}</h3>
-                                    <p className="text-sm text-muted-foreground truncate">
-                                        {conversation.last_message}
-                                    </p>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-semibold">{conversation.other_user.full_name}</h3>
+                                        {conversation.request_type === 'direct' && (
+                                            <Badge variant="secondary" className="text-orange-600 bg-orange-50 border-orange-200 text-xs py-0">
+                                                ⚡ Urgente
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground truncate">{conversation.last_message}</p>
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-xs text-muted-foreground shrink-0">
                                     {new Date(conversation.last_message_at).toLocaleDateString()}
                                 </div>
                             </div>

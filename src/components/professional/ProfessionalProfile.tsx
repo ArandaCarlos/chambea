@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JOB_CATEGORIES } from "@/lib/constants/job-categories";
-import { Star, MapPin, ShieldCheck, CheckCircle2, Clock } from "lucide-react";
+import { Star, MapPin, ShieldCheck, CheckCircle2, Clock, Zap } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
+import { useState } from "react";
+import { UrgentContactModal } from "@/components/urgent/UrgentContactModal";
 
 interface Review {
     id: string;
@@ -53,6 +55,7 @@ function StarRow({ rating }: { rating: number }) {
 
 export function ProfessionalProfile({ profile, reviews = [] }: ProfessionalProfileProps) {
     const category = JOB_CATEGORIES.find(c => c.id === profile.trade);
+    const [showContactModal, setShowContactModal] = useState(false);
 
     return (
         <div className="space-y-8">
@@ -112,10 +115,29 @@ export function ProfessionalProfile({ profile, reviews = [] }: ProfessionalProfi
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                        <Button size="lg" className="flex-1 sm:flex-none" asChild>
+                        <Button
+                            size="lg"
+                            className="flex-1 sm:flex-none bg-orange-500 hover:bg-orange-600"
+                            onClick={() => setShowContactModal(true)}
+                        >
+                            <Zap className="w-4 h-4 mr-2" />
+                            Contactar ahora
+                        </Button>
+                        <Button size="lg" variant="outline" className="flex-1 sm:flex-none" asChild>
                             <Link href={`/client/post-job?pro=${profile.id}`}>Solicitar trabajo</Link>
                         </Button>
                     </div>
+
+                    {/* Urgent Contact Modal */}
+                    <UrgentContactModal
+                        open={showContactModal}
+                        onClose={() => setShowContactModal(false)}
+                        professional={{
+                            id: profile.id,
+                            full_name: profile.full_name,
+                            trade: profile.trade,
+                        }}
+                    />
                 </div>
             </div>
 
