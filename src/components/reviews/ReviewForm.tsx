@@ -73,27 +73,11 @@ export function ReviewForm({ jobId, professionalId, professionalName, onSuccess 
                 .update({ status: 'completed', completed_at: new Date().toISOString() })
                 .eq('id', jobId);
 
-            // Recalculate professional average rating
-            const { data: allReviews } = await supabase
-                .from('reviews')
-                .select('rating')
-                .eq('reviewee_id', professionalId)
-                .eq('review_type', 'client_to_professional');
 
-            if (allReviews && allReviews.length > 0) {
-                const avg = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
-                await supabase
-                    .from('professional_profiles')
-                    .update({
-                        average_rating: Math.round(avg * 100) / 100,
-                        total_reviews: allReviews.length,
-                    })
-                    .eq('profile_id', professionalId);
-            }
-
+            // Stats are updated automatically by Postgres triggers (SECURITY DEFINER)
 
             toast.success("¡Calificación enviada! Gracias por usar Chambea.");
-            onSuccess?.();
+
             router.push("/client/dashboard");
 
         } catch (error: any) {
