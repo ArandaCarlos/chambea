@@ -5,13 +5,12 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, MessageSquare, User } from "lucide-react";
+import { Loader2, ArrowLeft, MapPin, Calendar, DollarSign, MessageSquare, User, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
 import { ProposalForm } from "@/components/proposal/ProposalForm";
+import { FinalQuoteForm } from "@/components/proposal/FinalQuoteForm";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +24,7 @@ export default function ProfessionalJobManagePage() {
     const jobId = params?.id ? String(params.id) : null;
 
     useEffect(() => {
-        if (jobId) {
-            loadJob(jobId);
-        }
+        if (jobId) loadJob(jobId);
     }, [jobId]);
 
     async function loadJob(id: string) {
@@ -35,42 +32,28 @@ export default function ProfessionalJobManagePage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return router.push('/login');
 
-            // Fetch Job details
             const { data: jobData, error } = await supabase
                 .from('jobs')
-                .select(`
-                    *,
-                    client:client_id (
-                        id,
-                        full_name,
-                        avatar_url,
-                        phone,
-                        email
-                    )
-                `)
+                .select(`*, client:client_id (id, full_name, avatar_url, phone, email)`)
                 .eq('id', id)
                 .single();
 
             if (error) throw error;
 
-            // Get the professional's profile id
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('id')
                 .eq('user_id', user.id)
                 .single();
 
-            // Check if this pro already has a proposal (null is OK — they haven't proposed yet)
             const { data: proposal } = await supabase
                 .from('proposals')
-                .select('status')
+                .select('status, proposal_type, visit_date, visit_time_slot')
                 .eq('job_id', id)
                 .eq('professional_id', profile?.id)
                 .maybeSingle();
 
-            // proposal_status = null means they can still submit a proposal
-            setJob({ ...jobData, proposal_status: proposal?.status ?? null });
-
+            setJob({ ...jobData, proposal_status: proposal?.status ?? null, proposal_type: proposal?.proposal_type ?? null });
         } catch (error) {
             console.error(error);
             toast.error("Error al cargar el trabajo");
@@ -79,12 +62,28 @@ export default function ProfessionalJobManagePage() {
         }
     }
 
+    function getStatusLabel() {
+        if (!job) return "";
+        const map: Record<string, { label: string; variant: any; color: string }> = {
+            open: { label: "Abierto", variant: "outline", color: "" },
+            visit_scheduled: { label: "Visita Agendada", variant: "secondary", color: "bg-amber-100 text-amber-800 border-amber-200" },
+            quoted: { label: "Presupuesto Enviado", variant: "secondary", color: "bg-blue-100 text-blue-800 border-blue-200" },
+            accepted: { label: "Contratado", variant: "secondary", color: "bg-green-100 text-green-800 border-green-200" },
+            in_progress: { label: "En Progreso", variant: "secondary", color: "" },
+            completed: { label: "Completado", variant: "outline", color: "" },
+        };
+        return map[job.status] || { label: job.status, variant: "outline", color: "" };
+    }
+
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="animate-spin" /></div>;
     if (!job) return <div>Trabajo no encontrado</div>;
 
-    const isAccepted = job.proposal_status === 'accepted';
+    const isAccepted = job.status === 'accepted' || job.status === 'in_progress' || job.status === 'completed';
+    const isVisitScheduled = job.status === 'visit_scheduled';
+    const isQuoted = job.status === 'quoted';
     const hasProposal = job.proposal_status !== null;
     const isOpenForBidding = !hasProposal && job.status === 'open';
+    const statusInfo = getStatusLabel();
 
     return (
         <div className="space-y-6 max-w-4xl">
@@ -98,28 +97,23 @@ export default function ProfessionalJobManagePage() {
             <div className="flex justify-between items-start">
                 <div className="space-y-1">
                     <h1 className="text-3xl font-bold">{job.title}</h1>
-                    <div className="flex items-center gap-2">
-                        <Badge variant={isAccepted ? "secondary" : "outline"}>
-                            {isAccepted
-                                ? "Trabajo Aceptado"
-                                : hasProposal
-                                    ? "Postulación Pendiente"
-                                    : "Sin postulación"}
-                        </Badge>
-                    </div>
+                    <Badge className={statusInfo.color || ""} variant={statusInfo.variant}>
+                        {statusInfo.label}
+                    </Badge>
                 </div>
             </div>
 
-            {/* Client Info Card - Only if Accepted */}
-            {isAccepted && (
+            {/* Client Info - Only if accepted/visit/quoted */}
+            {(isAccepted || isVisitScheduled || isQuoted) && job.client && (
                 <Card className="border-blue-200 bg-blue-50/30">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-blue-800">
-                            <User className="h-5 w-5" />
-                            Cliente
+                            <User className="h-5 w-5" /> Cliente
                         </CardTitle>
                         <CardDescription>
-                            Contactá al cliente para coordinar el trabajo.
+                            {isVisitScheduled
+                                ? "Confirmaste la visita. Coordiná con el cliente."
+                                : "Contactá al cliente para coordinar el trabajo."}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -129,18 +123,31 @@ export default function ProfessionalJobManagePage() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-lg">{job.client.full_name}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    {job.client.phone || "Teléfono no visible"}
-                                </p>
+                                <p className="text-sm text-muted-foreground">{job.client.phone || "Teléfono no visible"}</p>
                             </div>
                         </div>
-                        <div className="flex gap-3">
-                            <Button className="flex-1" asChild>
-                                <Link href={`/pro/messages?job=${job.id}&client=${job.client.id}`}>
-                                    <MessageSquare className="mr-2 h-4 w-4" />
-                                    Chatear
-                                </Link>
-                            </Button>
+                        <Button className="w-full" asChild>
+                            <Link href={`/pro/messages?job=${job.id}&client=${job.client.id}`}>
+                                <MessageSquare className="mr-2 h-4 w-4" /> Chatear
+                            </Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Visit scheduled banner */}
+            {isVisitScheduled && (
+                <Card className="border-amber-300 bg-amber-50/50">
+                    <CardContent className="py-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <Clock className="h-6 w-6 text-amber-600" />
+                            <div>
+                                <p className="font-semibold text-amber-800">Visita confirmada</p>
+                                <p className="text-sm text-amber-700">
+                                    Coordiná la fecha con el cliente por el chat.
+                                    Después de la visita, enviá el presupuesto final.
+                                </p>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -148,12 +155,9 @@ export default function ProfessionalJobManagePage() {
 
             {/* Job Details */}
             <Card>
-                <CardHeader>
-                    <CardTitle>Detalles del Trabajo</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Detalles del Trabajo</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <p className="whitespace-pre-wrap text-muted-foreground">{job.description}</p>
-
                     <div className="grid grid-cols-2 gap-4 mt-4">
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -161,7 +165,7 @@ export default function ProfessionalJobManagePage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
-                            <span>Presupuesto: ${job.client_budget_max?.toLocaleString() || 'A convenir'}</span>
+                            <span>Presupuesto cliente: ${job.client_budget_max?.toLocaleString() || 'A convenir'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -174,39 +178,41 @@ export default function ProfessionalJobManagePage() {
             {/* Photos */}
             {job.work_photos && job.work_photos.length > 0 && (
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Fotos del trabajo</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle>Fotos del trabajo</CardTitle></CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {job.work_photos.map((photo: string, idx: number) => (
-                                <img
-                                    key={idx}
-                                    src={photo}
-                                    alt={`Foto ${idx + 1}`}
-                                    className="rounded-lg object-cover aspect-square"
-                                />
+                                <img key={idx} src={photo} alt={`Foto ${idx + 1}`} className="rounded-lg object-cover aspect-square" />
                             ))}
                         </div>
                     </CardContent>
                 </Card>
             )}
 
-            {/* ProposalForm: only show if job is open and pro hasn't proposed yet */}
-            {isOpenForBidding && (
-                <ProposalForm jobId={job.id} />
+            {/* ProposalForm: open jobs without a proposal */}
+            {isOpenForBidding && <ProposalForm jobId={job.id} />}
+
+            {/* FinalQuoteForm: after visit is done */}
+            {isVisitScheduled && (
+                <FinalQuoteForm jobId={job.id} onSuccess={() => loadJob(job.id)} />
             )}
 
-            {/* Message for pros who already proposed but aren't accepted yet */}
-            {hasProposal && !isAccepted && (
+            {/* Quoted state: waiting for client to accept */}
+            {isQuoted && (
+                <Card className="border-blue-200 bg-blue-50/30">
+                    <CardContent className="py-6 text-center">
+                        <p className="font-semibold text-blue-800 text-lg mb-1">Presupuesto enviado</p>
+                        <p className="text-sm text-blue-700">El cliente está revisando tu presupuesto final. Te avisaremos cuando lo acepte.</p>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Already proposed, not yet accepted */}
+            {hasProposal && !isAccepted && !isVisitScheduled && !isQuoted && (
                 <Card className="border-muted bg-muted/30">
                     <CardContent className="py-6 text-center">
-                        <p className="text-muted-foreground">
-                            Ya enviaste una propuesta para este trabajo. El cliente la está revisando.
-                        </p>
-                        <Button variant="outline" className="mt-4" onClick={() => router.push("/pro/my-jobs")}>
-                            Ver mis postulaciones
-                        </Button>
+                        <p className="text-muted-foreground">Ya enviaste una propuesta. El cliente la está revisando.</p>
+                        <Button variant="outline" className="mt-4" onClick={() => router.push("/pro/my-jobs")}>Ver mis postulaciones</Button>
                     </CardContent>
                 </Card>
             )}
