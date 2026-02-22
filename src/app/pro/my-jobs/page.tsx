@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Briefcase } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,10 @@ interface Job {
     created_at: string;
 }
 
-export default function ProfessionalMyJobsPage() {
+function MyJobsContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get('tab') || 'active';
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [jobs, setJobs] = useState<Job[]>([]);
@@ -148,7 +150,7 @@ export default function ProfessionalMyJobsPage() {
                 </p>
             </div>
 
-            <Tabs defaultValue="active" className="space-y-4">
+            <Tabs defaultValue={initialTab} className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="active">Activos ({activeJobs.length})</TabsTrigger>
                     <TabsTrigger value="pending">Postulaciones ({pendingProposals.length})</TabsTrigger>
@@ -222,5 +224,13 @@ export default function ProfessionalMyJobsPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    );
+}
+
+export default function ProfessionalMyJobsPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><span className="h-8 w-8 animate-spin text-primary">⏳</span></div>}>
+            <MyJobsContent />
+        </Suspense>
     );
 }

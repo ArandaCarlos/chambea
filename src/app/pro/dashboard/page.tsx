@@ -168,43 +168,56 @@ export default function ProfessionalDashboard() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Trabajos Activos</CardTitle>
-                        <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.activeJobs}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Propuestas Pendientes</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.pendingProposals}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Ganado (mes)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${stats.monthlyEarnings.toLocaleString('es-AR')}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Rating</CardTitle>
-                        <Star className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.rating > 0 ? stats.rating : '-'}</div>
-                        {stats.rating > 0 && <p className="text-xs text-muted-foreground">⭐ Promedio</p>}
-                    </CardContent>
-                </Card>
+                <Link href="/pro/my-jobs?tab=active" className="block">
+                    <Card className="cursor-pointer transition-all hover:shadow-md hover:ring-2 hover:ring-primary/20">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Trabajos Activos</CardTitle>
+                            <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.activeJobs}</div>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/pro/my-jobs?tab=pending" className="block">
+                    <Card className="cursor-pointer transition-all hover:shadow-md hover:ring-2 hover:ring-primary/20">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Propuestas Pendientes</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.pendingProposals}</div>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/pro/earnings" className="block">
+                    <Card className="cursor-pointer transition-all hover:shadow-md hover:ring-2 hover:ring-primary/20">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Ganado (mes)</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">${stats.monthlyEarnings.toLocaleString('es-AR')}</div>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/pro/reviews" className="block">
+                    <Card className="cursor-pointer transition-all hover:shadow-md hover:ring-2 hover:ring-primary/20">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Rating</CardTitle>
+                            <Star className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.rating > 0 ? stats.rating.toFixed(1) : '—'}</div>
+                            {stats.rating > 0 && <p className="text-xs text-muted-foreground">⭐ Promedio</p>}
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                {/* Vistas Perfil: read-only, no link */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Vistas Perfil</CardTitle>
@@ -212,6 +225,7 @@ export default function ProfessionalDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{stats.profileViews}</div>
+                        <p className="text-xs text-muted-foreground">Próximamente</p>
                     </CardContent>
                 </Card>
             </div>
