@@ -118,6 +118,12 @@ export function Header() {
                     {pathname.startsWith("/client") && (
                         <>
                             <Link
+                                href="/client/search"
+                                className={cn("transition-colors hover:text-primary", pathname.includes("search") ? "text-primary" : "text-muted-foreground")}
+                            >
+                                Buscar Profesionales
+                            </Link>
+                            <Link
                                 href="/client/post-job"
                                 className={cn("transition-colors hover:text-primary", pathname.includes("post-job") ? "text-primary" : "text-muted-foreground")}
                             >
