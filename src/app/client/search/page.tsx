@@ -60,15 +60,8 @@ export default function SearchPage() {
 
     async function loadProfessionals() {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            // Get all professionals
-            // NOTE: profiles table has identity_verified, NOT is_verified
+            // professional_profiles has UNIQUE on profile_id → PostgREST returns it
+            // as a plain OBJECT {trade, ...}, NOT an array [{trade, ...}]
             const { data, error } = await supabase
                 .from('profiles')
                 .select(`
@@ -89,32 +82,33 @@ export default function SearchPage() {
                 .eq('is_active', true);
 
             if (error) {
-                console.error("Supabase error:", error);
-                throw error;
+                console.error("Search query error:", error.message, error.details);
+                setLoading(false);
+                return;
             }
 
-            // Transform data
+            // professional_profiles comes as object (not array) due to UNIQUE FK
             const transformedPros = (data || [])
-                .filter((p: any) => p.professional_profiles && p.professional_profiles.length > 0)
-                .map((p: any) => ({
-                    id: p.id,
-                    full_name: p.full_name,
-                    avatar_url: p.avatar_url,
-                    location: {
-                        city: p.city || 'CABA',
-                        distance: 0
-                    },
-                    trade: p.professional_profiles[0].trade || 'general',
-                    hourly_rate: p.professional_profiles[0].hourly_rate || 0,
-                    is_verified: p.identity_verified || false,
-                    available_now: p.professional_profiles[0].available_now || false,
-                    rating: p.professional_profiles[0].average_rating || 0,
-                    reviews_count: p.professional_profiles[0].total_reviews || 0,
-                }));
+                .filter((p: any) => p.professional_profiles !== null)
+                .map((p: any) => {
+                    const pp = p.professional_profiles;
+                    return {
+                        id: p.id,
+                        full_name: p.full_name,
+                        avatar_url: p.avatar_url,
+                        location: { city: p.city || 'CABA', distance: 0 },
+                        trade: pp.trade || 'general',
+                        hourly_rate: pp.hourly_rate || 0,
+                        is_verified: p.identity_verified || false,
+                        available_now: pp.available_now || false,
+                        rating: pp.average_rating || 0,
+                        reviews_count: pp.total_reviews || 0,
+                    };
+                });
 
             setProfessionals(transformedPros);
-        } catch (error) {
-            console.error("Error loading professionals:", error);
+        } catch (err) {
+            console.error("Error loading professionals:", err);
         } finally {
             setLoading(false);
         }
