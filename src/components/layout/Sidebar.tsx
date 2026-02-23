@@ -42,6 +42,7 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
 
     // Specific links
     const clientLinks = [
+        { href: "/client/search", label: "Buscar Profesionales", icon: Search },
         { href: "/client/post-job", label: "Publicar Trabajo", icon: Briefcase },
         { href: "/client/jobs", label: "Mis Solicitudes", icon: Briefcase },
     ];
