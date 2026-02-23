@@ -67,7 +67,8 @@ export default function SearchPage() {
                 return;
             }
 
-            // Get all professionals — is_verified lives on profiles, not professional_profiles
+            // Get all professionals
+            // NOTE: profiles table has identity_verified, NOT is_verified
             const { data, error } = await supabase
                 .from('profiles')
                 .select(`
@@ -75,7 +76,7 @@ export default function SearchPage() {
                     full_name,
                     avatar_url,
                     city,
-                    is_verified,
+                    identity_verified,
                     professional_profiles (
                         trade,
                         hourly_rate,
@@ -84,12 +85,16 @@ export default function SearchPage() {
                         total_reviews
                     )
                 `)
-                .eq('user_type', 'professional');
+                .eq('user_type', 'professional')
+                .eq('is_active', true);
 
-            if (error) throw error;
+            if (error) {
+                console.error("Supabase error:", error);
+                throw error;
+            }
 
             // Transform data
-            const transformedPros = data
+            const transformedPros = (data || [])
                 .filter((p: any) => p.professional_profiles && p.professional_profiles.length > 0)
                 .map((p: any) => ({
                     id: p.id,
@@ -101,7 +106,7 @@ export default function SearchPage() {
                     },
                     trade: p.professional_profiles[0].trade || 'general',
                     hourly_rate: p.professional_profiles[0].hourly_rate || 0,
-                    is_verified: p.is_verified || false,
+                    is_verified: p.identity_verified || false,
                     available_now: p.professional_profiles[0].available_now || false,
                     rating: p.professional_profiles[0].average_rating || 0,
                     reviews_count: p.professional_profiles[0].total_reviews || 0,
