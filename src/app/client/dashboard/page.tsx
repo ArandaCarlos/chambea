@@ -2,29 +2,33 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Plus, Search, MapPin, ShieldCheck, Loader2 } from "lucide-react";
-import { JobCard } from "@/components/job/JobCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ProfessionalCard } from "@/components/professional/ProfessionalCard";
+import { JOB_CATEGORIES } from "@/lib/constants/job-categories";
+import { createClient } from "@/lib/supabase/client";
+import {
+    ShieldCheck, Plus, Search, Zap, FileText, Loader2,
+    Star, Users
+} from "lucide-react";
 
-interface Profile {
-    full_name: string;
-}
+interface Profile { full_name: string; }
 
-interface Job {
+interface Professional {
     id: string;
-    title: string;
-    description: string;
-    category_id: string;
-    status: string;
-    address: string;
-    city: string;
-    client_budget_max: number | null;
-    urgency: string;
-    created_at: string;
+    full_name: string;
+    avatar_url: string | null;
+    trade: string;
+    rating: number;
+    reviews_count: number;
+    hourly_rate: number;
+    location: { city: string; distance?: number };
+    is_verified: boolean;
+    available_now: boolean;
 }
 
 export default function ClientDashboard() {
@@ -32,95 +36,70 @@ export default function ClientDashboard() {
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [recentJobs, setRecentJobs] = useState<Job[]>([]);
-    const [stats, setStats] = useState({
-        activeJobs: 0,
-        totalProposals: 0,
-        unreadMessages: 0,
-        totalSpent: 0,
-    });
+    const [professionals, setProfessionals] = useState<Professional[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState("all");
 
-    useEffect(() => {
-        loadDashboardData();
-    }, []);
+    useEffect(() => { loadData(); }, []);
 
-    async function loadDashboardData() {
+    async function loadData() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push("/login"); return; }
 
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            // Get profile
-            const { data: profileData, error: profileError } = await supabase
+            const { data: profileData } = await supabase
                 .from('profiles')
-                .select('id, full_name')
+                .select('full_name')
                 .eq('user_id', user.id)
                 .single();
 
-            if (profileError) throw profileError;
             setProfile(profileData);
 
-            // Get recent jobs (last 5)
-            const { data: jobsData, error: jobsError } = await supabase
-                .from('jobs')
-                .select('*')
-                .eq('client_id', profileData.id)
-                .order('created_at', { ascending: false })
-                .limit(5);
+            const { data, error } = await supabase
+                .from('profiles')
+                .select(`
+                    id, full_name, avatar_url, city, identity_verified,
+                    professional_profiles (
+                        trade, hourly_rate, available_now, average_rating, total_reviews
+                    )
+                `)
+                .eq('user_type', 'professional')
+                .eq('is_active', true);
 
-            if (jobsError) throw jobsError;
-
-            const transformedJobs = jobsData.map((job: any) => ({
-                ...job,
-                client: {
-                    full_name: "Tú",
-                    avatar_url: null,
-                },
-                location: {
-                    address: job.address,
-                    city: job.city,
-                },
-                budget: job.client_budget_max,
-            }));
-
-            setRecentJobs(transformedJobs);
-
-            // Count active jobs
-            const { count: activeCount } = await supabase
-                .from('jobs')
-                .select('*', { count: 'exact', head: true })
-                .eq('client_id', profileData.id)
-                .in('status', ['open', 'accepted', 'in_progress']);
-
-            // Count total proposals received
-            const { count: proposalsCount } = await supabase
-                .from('proposals')
-                .select('*', { count: 'exact', head: true })
-                .in('job_id', jobsData.map(j => j.id));
-
-            // Count unread messages (if messages table exists)
-            const { count: messagesCount } = await supabase
-                .from('messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('receiver_id', profileData.id)
-                .eq('read', false);
-
-            setStats({
-                activeJobs: activeCount || 0,
-                totalProposals: proposalsCount || 0,
-                unreadMessages: messagesCount || 0,
-                totalSpent: 0, // TODO: Calculate from transactions
-            });
-
+            if (!error && data) {
+                const pros = data
+                    .filter((p: any) => p.professional_profiles !== null)
+                    .map((p: any) => {
+                        const pp = p.professional_profiles;
+                        return {
+                            id: p.id,
+                            full_name: p.full_name,
+                            avatar_url: p.avatar_url,
+                            location: { city: p.city || 'CABA', distance: 0 },
+                            trade: pp.trade || 'general',
+                            hourly_rate: pp.hourly_rate || 0,
+                            is_verified: p.identity_verified || false,
+                            available_now: pp.available_now || false,
+                            rating: pp.average_rating || 0,
+                            reviews_count: pp.total_reviews || 0,
+                        };
+                    });
+                setProfessionals(pros);
+            }
         } catch (error) {
             console.error("Error loading dashboard:", error);
         } finally {
             setLoading(false);
         }
     }
+
+    const filteredPros = professionals.filter(pro => {
+        const matchesSearch = !searchTerm ||
+            pro.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            pro.trade.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = selectedCategory === "all" || pro.trade === selectedCategory;
+        return matchesSearch && matchesCategory;
+    });
 
     if (loading) {
         return (
@@ -132,7 +111,7 @@ export default function ClientDashboard() {
 
     return (
         <div className="space-y-8">
-            {/* Welcome & Quick Actions */}
+            {/* Welcome Hero */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-primary/5 p-6 rounded-xl border border-primary/10">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">
@@ -142,7 +121,6 @@ export default function ClientDashboard() {
                         Publicá tu problema y recibí presupuestos de profesionales verificados en minutos.
                         Tu dinero está protegido hasta que el trabajo esté terminado.
                     </p>
-
                     <div className="flex items-center gap-2 mt-4">
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             <ShieldCheck className="w-3 h-3 mr-1" />
@@ -150,7 +128,6 @@ export default function ClientDashboard() {
                         </Badge>
                     </div>
                 </div>
-
                 <div className="w-full md:w-auto">
                     <Button asChild size="lg" className="w-full md:w-auto text-lg h-14 px-8 shadow-lg hover:shadow-xl transition-all">
                         <Link href="/client/post-job">
@@ -161,74 +138,116 @@ export default function ClientDashboard() {
                 </div>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Trabajos Activos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.activeJobs}</div>
+            {/* Two-option explanation */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Option 1: Find pro directly */}
+                <Card className="border-2 border-orange-200 bg-orange-50/50">
+                    <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <Zap className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-base">Contactar un profesional directamente</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Elegís vos a quién contratar. Buscás un profesional abajo, lo contactás, negociás el precio por chat y lo contratás al instante.
+                                    <span className="block mt-1 font-medium text-orange-700">Ideal para urgencias o cuando ya sabés quién querés.</span>
+                                </p>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Postulaciones</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.totalProposals}</div>
-                        <p className="text-xs text-muted-foreground">Recibidas</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Mensajes</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.unreadMessages}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Gastado</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${stats.totalSpent}</div>
+
+                {/* Option 2: Post a job */}
+                <Card className="border-2 border-primary/20 bg-primary/5">
+                    <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-base">Publicar un trabajo y recibir presupuestos</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Describís lo que necesitás y los profesionales de la zona te mandan sus propuestas. Comparás y elegís la mejor opción.
+                                    <span className="block mt-1 font-medium text-primary">Ideal para trabajos más complejos donde querés comparar precios.</span>
+                                </p>
+                                <Button asChild size="sm" variant="outline" className="mt-3">
+                                    <Link href="/client/post-job">
+                                        <Plus className="w-3 h-3 mr-1" /> Publicar trabajo
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 gap-8">
-                {/* Main Column */}
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-semibold">Tus trabajos recientes</h2>
-                        <Button variant="link" asChild>
-                            <Link href="/client/jobs">Ver todos</Link>
-                        </Button>
-                    </div>
-
-                    <div className="space-y-4">
-                        {recentJobs.length === 0 ? (
-                            <Card className="p-12 text-center">
-                                <p className="text-muted-foreground mb-4">
-                                    No tenés trabajos publicados todavía
-                                </p>
-                                <Button asChild>
-                                    <Link href="/client/post-job">
-                                        Publicar tu primer trabajo
-                                    </Link>
-                                </Button>
-                            </Card>
-                        ) : (
-                            recentJobs.map((job) => (
-                                <JobCard key={job.id} job={job as any} href={`/client/jobs/${job.id}`} />
-                            ))
-                        )}
+            {/* Professional Search — main section */}
+            <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            <Users className="w-5 h-5 text-orange-500" />
+                            Profesionales disponibles
+                        </h2>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                            {professionals.length > 0
+                                ? `${professionals.length} profesional${professionals.length !== 1 ? 'es' : ''} en tu zona`
+                                : 'Buscando profesionales...'}
+                        </p>
                     </div>
                 </div>
+
+                {/* Search + Filter bar */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            className="pl-9"
+                            placeholder="Buscar por nombre o servicio..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger className="w-full sm:w-52">
+                            <SelectValue placeholder="Todas las categorías" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todas las categorías</SelectItem>
+                            {JOB_CATEGORIES.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Results */}
+                {filteredPros.length === 0 ? (
+                    <Card className="p-10 text-center">
+                        <Star className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                        <p className="text-muted-foreground font-medium">
+                            {professionals.length === 0
+                                ? "Todavía no hay profesionales registrados en la plataforma."
+                                : "No se encontraron profesionales con esos filtros."}
+                        </p>
+                        {professionals.length > 0 && (
+                            <button
+                                className="text-sm text-primary mt-2 underline"
+                                onClick={() => { setSearchTerm(""); setSelectedCategory("all"); }}
+                            >
+                                Limpiar filtros
+                            </button>
+                        )}
+                    </Card>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredPros.map(pro => (
+                            <ProfessionalCard key={pro.id} professional={pro} />
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 }
-
