@@ -36,21 +36,32 @@ interface AddressSuggestion {
 async function fetchAddressSuggestions(query: string): Promise<AddressSuggestion[]> {
     if (query.length < 5) return [];
     try {
-        const url = `https://apis.datos.gob.ar/georef/api/direcciones?direccion=${encodeURIComponent(query)}&max=6`;
+        const url = `https://apis.datos.gob.ar/georef/api/direcciones?direccion=${encodeURIComponent(query)}&max=10`;
         const res = await fetch(url);
         if (!res.ok) return [];
         const data = await res.json();
-        return (data.direcciones ?? []).map((d: any) => {
-            const street = d.calle?.nombre ?? "";
-            const number = d.altura?.valor ?? d.altura ?? "";
-            const locality = d.localidad_censal?.nombre ?? d.municipio?.nombre ?? "";
-            const province = d.provincia?.nombre ?? "";
-            const label = [
-                [street, number].filter(Boolean).join(" "),
-                [locality, province].filter(Boolean).join(", ")
-            ].filter(Boolean).join(", ");
-            return { label, normalized: label };
-        });
+
+        // Use nomenclatura (already clean) and deduplicate — API returns same street
+        // many times when no house number is found (one entry per block segment)
+        const seen = new Set<string>();
+        const results: AddressSuggestion[] = [];
+
+        for (const d of (data.direcciones ?? [])) {
+            const base = d.nomenclatura as string | undefined;
+            if (!base) continue;
+
+            // Prepend house number if available
+            const number = d.altura?.valor;
+            const label = number ? `${d.calle?.nombre ?? ""} ${number}, ${base.split(",").slice(1).join(",").trim()}` : base;
+
+            if (!seen.has(label)) {
+                seen.add(label);
+                results.push({ label, normalized: label });
+            }
+            if (results.length >= 6) break;
+        }
+
+        return results;
     } catch {
         return [];
     }
