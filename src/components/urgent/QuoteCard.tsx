@@ -10,9 +10,10 @@ import { cn } from "@/lib/utils";
 interface QuoteCardProps {
     messageId: string;
     jobId: string;
-    senderId: string;     // professional's profile id
-    receiverId: string;   // client's profile id
+    senderId: string;
+    receiverId: string;
     currentUserId: string;
+    currentUserRole?: "client" | "professional";
     metadata: {
         price: number;
         commission?: number;
@@ -21,25 +22,27 @@ interface QuoteCardProps {
         estimated_hours?: number;
     };
     status?: "pending" | "accepted" | "rejected";
-    onAction?: () => void; // callback to refresh messages
+    onAction?: () => void;
 }
 
 export function QuoteCard({
-    messageId, jobId, senderId, receiverId, currentUserId,
+    messageId, jobId, senderId, receiverId, currentUserId, currentUserRole,
     metadata, status = "pending", onAction,
 }: QuoteCardProps) {
     const supabase = createClient();
     const [loading, setLoading] = useState<"accept" | "reject" | null>(null);
 
-    const isClient = currentUserId === receiverId;
+    const isClient = currentUserRole === "client" || currentUserId === receiverId;
+    const isPro = currentUserRole === "professional";
     const isPending = status === "pending";
+
     const commission = metadata.commission ?? Math.round(metadata.price * 0.10);
     const proReceives = metadata.pro_receives ?? (metadata.price - commission);
 
     async function handleAccept() {
         setLoading("accept");
         try {
-            // 1. Update job: accepted + quoted_price + professional_id
+            // 1. Update job
             const { error: jobError, data: jobData } = await supabase
                 .from('jobs')
                 .update({ status: 'accepted', quoted_price: metadata.price, professional_id: senderId })
@@ -48,32 +51,34 @@ export function QuoteCard({
                 .single();
             if (jobError) throw jobError;
 
-            // 2. Send acceptance system message
+            // 2. Acceptance message
             await supabase.from('messages').insert({
                 job_id: jobId,
-                sender_id: receiverId,
+                sender_id: currentUserId,
                 receiver_id: senderId,
                 content: `✅ Acepté el presupuesto de $${metadata.price.toLocaleString('es-AR')}. ¡Nos vemos para el trabajo!`,
                 message_type: 'quote_accepted',
                 metadata: { original_quote_id: messageId, price: metadata.price },
             });
 
-            // 3. Insert job_link card so both users see a direct link
-            const jobUrl = `/client/jobs/${jobId}`;
+            // 3. Job link card — visible for both (client sees /client/jobs/[id], pro sees /pro/jobs/[id])
             await supabase.from('messages').insert({
                 job_id: jobId,
-                sender_id: receiverId,
+                sender_id: currentUserId,
                 receiver_id: senderId,
                 content: 'Trabajo confirmado',
                 message_type: 'job_link',
-                metadata: { job_url: jobUrl, job_title: jobData?.title ?? 'Ver trabajo' },
+                metadata: {
+                    job_url: `/client/jobs/${jobId}`, // ChatWindow remaps for pro
+                    job_title: jobData?.title ?? 'Ver trabajo',
+                },
             });
 
             toast.success("¡Presupuesto aceptado! El trabajo está confirmado.");
             onAction?.();
         } catch (error: any) {
             console.error(error);
-            toast.error("Error al aceptar el presupuesto");
+            toast.error("Error al aceptar: " + (error?.message ?? ""));
         } finally {
             setLoading(null);
         }
@@ -84,7 +89,7 @@ export function QuoteCard({
         try {
             await supabase.from('messages').insert({
                 job_id: jobId,
-                sender_id: receiverId,
+                sender_id: currentUserId,
                 receiver_id: senderId,
                 content: `❌ No acepté el presupuesto de $${metadata.price.toLocaleString('es-AR')}. Podemos seguir negociando.`,
                 message_type: 'quote_rejected',
@@ -123,7 +128,7 @@ export function QuoteCard({
                 </p>
             </div>
 
-            {/* Price */}
+            {/* Price — always visible */}
             <div className="text-center py-2">
                 <p className="text-3xl font-bold">${metadata.price.toLocaleString('es-AR')}</p>
                 {metadata.estimated_hours && (
@@ -131,55 +136,50 @@ export function QuoteCard({
                 )}
             </div>
 
-            {/* Commission breakdown */}
-            <div className="rounded-lg bg-white/60 border px-3 py-2 space-y-1 text-xs">
-                <div className="flex justify-between text-muted-foreground">
-                    <span>Comisión Chambea (10%)</span>
-                    <span className="text-orange-600">- ${commission.toLocaleString('es-AR')}</span>
+            {/* Commission breakdown — ONLY for professionals */}
+            {isPro && (
+                <div className="rounded-lg bg-white/60 border px-3 py-2 space-y-1 text-xs">
+                    <div className="flex justify-between text-muted-foreground">
+                        <span>Comisión Chambea (10%)</span>
+                        <span className="text-orange-600">- ${commission.toLocaleString('es-AR')}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t pt-1">
+                        <span>Vos recibís</span>
+                        <span className="text-green-700">${proReceives.toLocaleString('es-AR')}</span>
+                    </div>
                 </div>
-                <div className="flex justify-between font-semibold border-t pt-1">
-                    <span>El profesional recibe</span>
-                    <span className="text-green-700">${proReceives.toLocaleString('es-AR')}</span>
-                </div>
-            </div>
+            )}
 
             {/* Description */}
             {metadata.description && (
                 <p className="text-sm text-muted-foreground border-t pt-2">{metadata.description}</p>
             )}
 
-            {/* Actions — only for client when pending */}
+            {/* Actions — only client, only when pending */}
             {isClient && isPending && (
                 <div className="flex gap-2 pt-1">
-                    <Button
-                        size="sm"
-                        variant="outline"
+                    <Button size="sm" variant="outline"
                         className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
-                        onClick={handleReject}
-                        disabled={loading !== null}
-                    >
+                        onClick={handleReject} disabled={loading !== null}>
                         {loading === "reject" ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3 mr-1" />}
                         Rechazar
                     </Button>
-                    <Button
-                        size="sm"
+                    <Button size="sm"
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                        onClick={handleAccept}
-                        disabled={loading !== null}
-                    >
+                        onClick={handleAccept} disabled={loading !== null}>
                         {loading === "accept" ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
                         Aceptar
                     </Button>
                 </div>
             )}
 
-            {/* Status badge — locked after decision */}
+            {/* Locked badge after decision */}
             {!isPending && (
                 <div className={cn(
                     "text-xs font-medium text-center py-1 rounded-md",
                     status === "accepted" ? "text-green-700 bg-green-100" : "text-red-600 bg-red-100"
                 )}>
-                    {status === "accepted" ? "✅ Trabajo confirmado — decisión bloqueada" : "❌ Rechazado"}
+                    {status === "accepted" ? "✅ Trabajo confirmado" : "❌ Rechazado"}
                 </div>
             )}
         </div>
