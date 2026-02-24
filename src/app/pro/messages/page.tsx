@@ -13,6 +13,7 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 interface Conversation {
     id: string;
     job_id: string;
+    job_title?: string;
     job_status?: string;
     request_type?: string;
     other_user: {
@@ -66,13 +67,14 @@ export default function ProfessionalMessagesPage() {
                 if (!conversationMap.has(conversationKey)) {
                     const [otherUserRes, jobRes] = await Promise.all([
                         supabase.from('profiles').select('id, full_name, avatar_url').eq('id', otherUserId).single(),
-                        supabase.from('jobs').select('status, request_type').eq('id', msg.job_id).single(),
+                        supabase.from('jobs').select('title, status, request_type').eq('id', msg.job_id).single(),
                     ]);
 
                     if (otherUserRes.data) {
                         conversationMap.set(conversationKey, {
                             id: conversationKey,
                             job_id: msg.job_id,
+                            job_title: jobRes.data?.title,
                             job_status: jobRes.data?.status,
                             request_type: jobRes.data?.request_type,
                             other_user: otherUserRes.data,
@@ -127,16 +129,21 @@ export default function ProfessionalMessagesPage() {
                     <Button variant="ghost" onClick={() => setSelectedConversation(null)} className="mb-4">
                         ← Volver a conversaciones
                     </Button>
-                    <div className="mb-4 flex items-center gap-2">
-                        <h2 className="text-2xl font-bold">Chat con {selectedConversation.other_user.full_name}</h2>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold">
+                            {selectedConversation.job_title
+                                ? `${selectedConversation.job_title} · ${selectedConversation.other_user.full_name}`
+                                : `Chat con ${selectedConversation.other_user.full_name}`}
+                        </h2>
                         {selectedConversation.request_type === 'direct' && (
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-300 mt-1">
                                 <Zap className="w-3 h-3 mr-1" /> Urgente
                             </Badge>
                         )}
                     </div>
                     <ChatWindow
                         jobId={selectedConversation.job_id}
+                        jobTitle={selectedConversation.job_title}
                         jobStatus={selectedConversation.job_status}
                         requestType={selectedConversation.request_type}
                         currentUser={{ id: currentUserId, role: "professional" }}
@@ -144,6 +151,7 @@ export default function ProfessionalMessagesPage() {
                             id: selectedConversation.other_user.id,
                             full_name: selectedConversation.other_user.full_name,
                             avatar_url: selectedConversation.other_user.avatar_url || undefined,
+                            profilePath: `/profile/${selectedConversation.other_user.id}`,
                         }}
                     />
                 </div>
@@ -189,7 +197,7 @@ export default function ProfessionalMessagesPage() {
     );
 }
 
-function ConversationRow(conv: { request_type?: string; other_user: { full_name: string }; last_message: string; last_message_at: string }) {
+function ConversationRow(conv: { job_title?: string; request_type?: string; other_user: { full_name: string }; last_message: string; last_message_at: string }) {
     return (
         <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -204,6 +212,9 @@ function ConversationRow(conv: { request_type?: string; other_user: { full_name:
                         </Badge>
                     )}
                 </div>
+                {conv.job_title && (
+                    <p className="text-xs font-medium text-foreground/70 truncate">{conv.job_title}</p>
+                )}
                 <p className="text-sm text-muted-foreground truncate">{conv.last_message}</p>
             </div>
             <div className="text-xs text-muted-foreground shrink-0">

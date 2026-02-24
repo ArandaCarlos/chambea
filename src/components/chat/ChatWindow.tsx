@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, AlertTriangle, DollarSign, Loader2 } from "lucide-react";
+import { Send, Paperclip, AlertTriangle, DollarSign, Loader2, ExternalLink, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -21,6 +22,10 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { QuoteCard } from "@/components/urgent/QuoteCard";
+import Link from "next/link";
+
+// Chambea commission rate
+const COMMISSION_RATE = 0.10; // 10%
 
 interface Message {
     id: string;
@@ -35,12 +40,14 @@ interface Message {
 
 interface ChatWindowProps {
     jobId: string;
+    jobTitle?: string;
     jobStatus?: string;
     requestType?: string; // 'direct' | 'open'
     otherUser: {
         id: string;
         full_name: string;
         avatar_url?: string;
+        profilePath?: string; // e.g. "/profile/xxxxxxxx"
     };
     currentUser: {
         id: string;
@@ -59,7 +66,7 @@ const BLOCKED_PATTERNS = [
     /facebook/gi,
 ];
 
-export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUser }: ChatWindowProps) {
+export function ChatWindow({ jobId, jobTitle, jobStatus, requestType, otherUser, currentUser }: ChatWindowProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isSending, setIsSending] = useState(false);
@@ -67,42 +74,59 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
     const [showQuoteModal, setShowQuoteModal] = useState(false);
     const [quoteForm, setQuoteForm] = useState({ price: "", description: "", estimated_hours: "" });
     const [isSendingQuote, setIsSendingQuote] = useState(false);
+    const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null); // message id being edited
     const scrollRef = useRef<HTMLDivElement>(null);
     const supabase = createClient();
 
     const isPro = currentUser.role === "professional";
     const isDirectJob = requestType === "direct";
-    const canSendQuote = isPro && isDirectJob && (jobStatus === "open" || jobStatus === "accepted");
+
+    // Derived quote state from messages
+    const quoteMessages = messages.filter(m => m.message_type === 'quote_offer');
+    const lastQuote = quoteMessages[quoteMessages.length - 1];
+    const hasAcceptedMsg = messages.some(m => m.message_type === 'quote_accepted');
+    const hasRejectedMsg = messages.some(m => m.message_type === 'quote_rejected');
+
+    // Quote is "live" (pending actionable) if no accepted/rejected yet — but might have been re-offered after rejection
+    // The current quote to show: last quote_offer. If already accepted = locked. If rejected = pro can send new
+    const latestQuoteIsRejected = lastQuote
+        ? messages.some(m => m.message_type === 'quote_rejected' && m.created_at > lastQuote.created_at)
+        : false;
+    const quoteIsAccepted = hasAcceptedMsg;
+    const quoteIsPending = lastQuote && !quoteIsAccepted && !latestQuoteIsRejected;
+
+    // Pro can send new quote only if: no pending quote OR last quote was rejected
+    const proCanSendQuote = isPro && isDirectJob && (jobStatus === "open" || jobStatus === "direct") &&
+        (!lastQuote || latestQuoteIsRejected);
+    // Pro can edit if there's a pending quote that belongs to them
+    const proCanEditQuote = isPro && !!lastQuote && quoteIsPending && lastQuote.sender_id === currentUser.id;
+
+    const fetchMessages = async () => {
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('job_id', jobId)
+            .order('created_at', { ascending: true });
+        if (!error && data) {
+            setMessages(data);
+            setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+    };
 
     useEffect(() => {
         if (!jobId || !otherUser.id) return;
-
-        const fetchMessages = async () => {
-            const { data, error } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('job_id', jobId)
-                .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
-                .order('created_at', { ascending: true });
-
-            if (!error && data) {
-                setMessages(data);
-                setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            }
-        };
-
         fetchMessages();
 
         const channel = supabase
             .channel(`chat_${jobId}`)
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*', // INSERT + UPDATE
                 schema: 'public',
                 table: 'messages',
                 filter: `job_id=eq.${jobId}`
-            }, (payload) => {
-                setMessages(prev => [...prev, payload.new as Message]);
-                setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }, () => {
+                // Full refresh on any change — handles quote inserts, updates
+                fetchMessages();
             })
             .subscribe();
 
@@ -117,11 +141,10 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
         if (!inputValue.trim() || isSending) return;
 
         const isFlagged = detectSuspiciousContent(inputValue);
-        if (isFlagged) {
-            setWarning("⚠️ Por tu seguridad, no compartas datos de contacto. Si arreglás por fuera, Chambea no puede protegerte.");
-        } else {
-            setWarning(null);
-        }
+        setWarning(isFlagged
+            ? "⚠️ Por tu seguridad, no compartas datos de contacto. Si arreglás por fuera, Chambea no puede protegerte."
+            : null
+        );
 
         setIsSending(true);
         try {
@@ -132,28 +155,30 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                 content: inputValue,
                 message_type: 'text',
             });
-
             if (error) throw error;
-
-            const newMessage: Message = {
-                id: Date.now().toString(),
-                sender_id: currentUser.id,
-                content: inputValue,
-                created_at: new Date().toISOString(),
-                message_type: 'text',
-                flagged: isFlagged,
-            };
-            setMessages(prev => [...prev, newMessage]);
             setInputValue("");
-
-            if (isFlagged) toast.warning("Mensaje enviado con advertencia", { description: "Recordá que los contactos directos anulan la garantía." });
-        } catch (error) {
-            console.error(error);
+            if (isFlagged) toast.warning("Mensaje enviado con advertencia");
+        } catch {
             toast.error("Error al enviar el mensaje");
         } finally {
             setIsSending(false);
-            setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         }
+    };
+
+    const handleOpenQuoteModal = (editId?: string) => {
+        if (editId && lastQuote) {
+            // Pre-fill with existing quote data
+            setEditingQuoteId(editId);
+            setQuoteForm({
+                price: String(lastQuote.metadata?.price ?? ""),
+                description: lastQuote.metadata?.description ?? "",
+                estimated_hours: String(lastQuote.metadata?.estimated_hours ?? ""),
+            });
+        } else {
+            setEditingQuoteId(null);
+            setQuoteForm({ price: "", description: "", estimated_hours: "" });
+        }
+        setShowQuoteModal(true);
     };
 
     const handleSendQuote = async (e: React.FormEvent) => {
@@ -163,28 +188,44 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
 
         setIsSendingQuote(true);
         try {
+            const commission = Math.round(price * COMMISSION_RATE);
+            const proReceives = price - commission;
             const metadata = {
                 price,
+                commission,
+                pro_receives: proReceives,
                 description: quoteForm.description || undefined,
                 estimated_hours: quoteForm.estimated_hours ? parseFloat(quoteForm.estimated_hours) : undefined,
             };
 
-            const { error } = await supabase.from('messages').insert({
-                job_id: jobId,
-                sender_id: currentUser.id,
-                receiver_id: otherUser.id,
-                content: `Presupuesto: $${price.toLocaleString('es-AR')}`,
-                message_type: 'quote_offer',
-                metadata,
-            });
+            if (editingQuoteId) {
+                // UPDATE existing quote message
+                const { error } = await supabase.from('messages')
+                    .update({
+                        content: `Presupuesto actualizado: $${price.toLocaleString('es-AR')}`,
+                        metadata,
+                    })
+                    .eq('id', editingQuoteId);
+                if (error) throw error;
+                toast.success("Presupuesto actualizado.");
+            } else {
+                // INSERT new quote
+                const { error } = await supabase.from('messages').insert({
+                    job_id: jobId,
+                    sender_id: currentUser.id,
+                    receiver_id: otherUser.id,
+                    content: `Presupuesto: $${price.toLocaleString('es-AR')}`,
+                    message_type: 'quote_offer',
+                    metadata,
+                });
+                if (error) throw error;
+                toast.success("Presupuesto enviado.");
+            }
 
-            if (error) throw error;
-
-            toast.success("Presupuesto enviado. El cliente puede aceptarlo desde el chat.");
             setShowQuoteModal(false);
+            setEditingQuoteId(null);
             setQuoteForm({ price: "", description: "", estimated_hours: "" });
-        } catch (error) {
-            console.error(error);
+        } catch {
             toast.error("Error al enviar el presupuesto");
         } finally {
             setIsSendingQuote(false);
@@ -202,31 +243,56 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
     return (
         <>
             <div className="flex flex-col h-[600px] border rounded-xl overflow-hidden bg-background shadow-sm">
-                {/* Header */}
+                {/* ─── Header ─── */}
                 <div className="p-4 border-b flex items-center gap-3 bg-muted/30">
-                    <Avatar>
-                        <AvatarImage src={otherUser.avatar_url} />
-                        <AvatarFallback>{otherUser.full_name[0]}</AvatarFallback>
-                    </Avatar>
+                    {/* Avatar → clickable to profile */}
+                    {otherUser.profilePath ? (
+                        <Link href={otherUser.profilePath}>
+                            <Avatar className="cursor-pointer ring-2 ring-transparent hover:ring-primary transition-all">
+                                <AvatarImage src={otherUser.avatar_url} />
+                                <AvatarFallback>{otherUser.full_name[0]}</AvatarFallback>
+                            </Avatar>
+                        </Link>
+                    ) : (
+                        <Avatar>
+                            <AvatarImage src={otherUser.avatar_url} />
+                            <AvatarFallback>{otherUser.full_name[0]}</AvatarFallback>
+                        </Avatar>
+                    )}
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">{otherUser.full_name}</h3>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-green-500" />
-                            En línea
-                        </p>
+                        {/* Name → clickable to profile */}
+                        {otherUser.profilePath ? (
+                            <Link href={otherUser.profilePath} className="font-semibold truncate hover:underline hover:text-primary block">
+                                {otherUser.full_name}
+                            </Link>
+                        ) : (
+                            <h3 className="font-semibold truncate">{otherUser.full_name}</h3>
+                        )}
+                        {jobTitle && (
+                            <p className="text-xs text-muted-foreground truncate">{jobTitle}</p>
+                        )}
                     </div>
-                    {/* Pro: Send Quote button */}
-                    {canSendQuote && (
+
+                    {/* Pro: send new quote button (only when allowed) */}
+                    {proCanSendQuote && (
                         <Button
                             size="sm"
                             variant="outline"
                             className="border-orange-400 text-orange-600 hover:bg-orange-50 shrink-0"
-                            onClick={() => setShowQuoteModal(true)}
+                            onClick={() => handleOpenQuoteModal()}
                         >
                             <DollarSign className="w-4 h-4 mr-1" />
                             Enviar presupuesto
                         </Button>
                     )}
+                    {/* Pro: send button disabled when quote pending */}
+                    {isPro && isDirectJob && lastQuote && quoteIsPending && (
+                        <Button size="sm" variant="outline" className="shrink-0" disabled>
+                            <DollarSign className="w-4 h-4 mr-1" />
+                            Presupuesto enviado
+                        </Button>
+                    )}
+
                     {isDirectJob && (
                         <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-300 shrink-0">
                             ⚡ Urgente
@@ -234,7 +300,7 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                     )}
                 </div>
 
-                {/* Messages */}
+                {/* ─── Messages ─── */}
                 <ScrollArea className="flex-1 p-4">
                     <div className="space-y-4">
                         {messages.map((msg) => {
@@ -242,42 +308,51 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                             const isQuoteOffer = msg.message_type === 'quote_offer';
                             const isQuoteAccepted = msg.message_type === 'quote_accepted';
                             const isQuoteRejected = msg.message_type === 'quote_rejected';
+                            const isJobLink = msg.message_type === 'job_link';
 
-                            // Quote offer card
+                            // ── Quote offer card
                             if (isQuoteOffer && msg.metadata) {
+                                // Determine effective status of THIS quote message
+                                const laterAccepted = messages.some(
+                                    m => m.message_type === 'quote_accepted' && m.created_at > msg.created_at
+                                );
+                                const laterRejected = messages.some(
+                                    m => m.message_type === 'quote_rejected' && m.created_at > msg.created_at
+                                );
+                                const effectiveStatus: "pending" | "accepted" | "rejected" =
+                                    laterAccepted ? "accepted" : laterRejected ? "rejected" : "pending";
+
                                 return (
-                                    <div key={msg.id} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
-                                        <div className="max-w-[80%]">
-                                            <p className="text-xs text-muted-foreground mb-1 px-1">
-                                                {isMe ? "Tu presupuesto" : `Presupuesto de ${otherUser.full_name}`}
-                                            </p>
-                                            <QuoteCard
-                                                messageId={msg.id}
-                                                jobId={jobId}
-                                                senderId={msg.sender_id}
-                                                receiverId={msg.receiver_id || otherUser.id}
-                                                currentUserId={currentUser.id}
-                                                metadata={msg.metadata}
-                                                status="pending"
-                                                onAccepted={() => {
-                                                    // Refresh messages
-                                                    const fetchMessages = async () => {
-                                                        const { data } = await supabase
-                                                            .from('messages')
-                                                            .select('*')
-                                                            .eq('job_id', jobId)
-                                                            .order('created_at', { ascending: true });
-                                                        if (data) setMessages(data);
-                                                    };
-                                                    fetchMessages();
-                                                }}
-                                            />
-                                        </div>
+                                    <div key={msg.id} className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
+                                        <p className="text-xs text-muted-foreground mb-1 px-1">
+                                            {isMe ? "Tu presupuesto" : `Presupuesto de ${otherUser.full_name}`}
+                                        </p>
+                                        <QuoteCard
+                                            messageId={msg.id}
+                                            jobId={jobId}
+                                            senderId={msg.sender_id}
+                                            receiverId={msg.receiver_id || otherUser.id}
+                                            currentUserId={currentUser.id}
+                                            metadata={msg.metadata}
+                                            status={effectiveStatus}
+                                            onAction={fetchMessages}
+                                        />
+                                        {/* Edit button for pro when this quote is pending */}
+                                        {isPro && isMe && effectiveStatus === "pending" && (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="mt-1 text-xs text-muted-foreground"
+                                                onClick={() => handleOpenQuoteModal(msg.id)}
+                                            >
+                                                <Pencil className="w-3 h-3 mr-1" /> Editar presupuesto
+                                            </Button>
+                                        )}
                                     </div>
                                 );
                             }
 
-                            // Quote accepted/rejected — show as system message
+                            // ── System: quote accepted / rejected
                             if (isQuoteAccepted || isQuoteRejected) {
                                 return (
                                     <div key={msg.id} className="flex justify-center">
@@ -291,7 +366,24 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                                 );
                             }
 
-                            // Regular text message
+                            // ── Job link card (shown after acceptance)
+                            if (isJobLink && msg.metadata?.job_url) {
+                                return (
+                                    <div key={msg.id} className="flex justify-center">
+                                        <Card className="p-4 border-2 border-green-300 bg-green-50 rounded-xl max-w-xs w-full text-center space-y-2">
+                                            <p className="text-sm font-semibold text-green-800">✅ ¡Trabajo confirmado!</p>
+                                            <p className="text-xs text-muted-foreground">{msg.metadata.job_title || "Ver detalles del trabajo"}</p>
+                                            <Button asChild size="sm" className="bg-green-600 hover:bg-green-700 w-full">
+                                                <Link href={msg.metadata.job_url}>
+                                                    <ExternalLink className="w-3 h-3 mr-1" /> Ver trabajo
+                                                </Link>
+                                            </Button>
+                                        </Card>
+                                    </div>
+                                );
+                            }
+
+                            // ── Regular text message
                             return (
                                 <div key={msg.id} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
                                     <div className={cn(
@@ -311,7 +403,7 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                     </div>
                 </ScrollArea>
 
-                {/* Warning */}
+                {/* ─── Warning ─── */}
                 {warning && (
                     <Alert variant="destructive" className="mx-4 mb-2 py-2">
                         <AlertTriangle className="h-4 w-4" />
@@ -320,7 +412,7 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                     </Alert>
                 )}
 
-                {/* Input */}
+                {/* ─── Input ─── */}
                 <div className="p-4 border-t bg-background">
                     <form onSubmit={handleSendMessage} className="flex gap-2">
                         <Button type="button" variant="ghost" size="icon" className="shrink-0">
@@ -341,13 +433,13 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                 </div>
             </div>
 
-            {/* Quote modal for professionals */}
+            {/* ─── Quote Modal ─── */}
             <Dialog open={showQuoteModal} onOpenChange={setShowQuoteModal}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <DollarSign className="w-5 h-5 text-orange-500" />
-                            Enviar presupuesto
+                            {editingQuoteId ? "Editar presupuesto" : "Enviar presupuesto"}
                         </DialogTitle>
                         <DialogDescription>
                             El cliente podrá aceptar o rechazar tu oferta desde el chat.
@@ -367,6 +459,30 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                                 required
                             />
                         </div>
+
+                        {/* Commission breakdown */}
+                        {quoteForm.price && parseFloat(quoteForm.price) > 0 && (() => {
+                            const p = parseFloat(quoteForm.price);
+                            const commission = Math.round(p * COMMISSION_RATE);
+                            const proReceives = p - commission;
+                            return (
+                                <div className="rounded-lg bg-muted p-3 space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Precio al cliente</span>
+                                        <span className="font-medium">${p.toLocaleString('es-AR')}</span>
+                                    </div>
+                                    <div className="flex justify-between text-orange-600">
+                                        <span>Comisión Chambea ({COMMISSION_RATE * 100}%)</span>
+                                        <span>- ${commission.toLocaleString('es-AR')}</span>
+                                    </div>
+                                    <div className="flex justify-between font-semibold border-t pt-1 mt-1">
+                                        <span>Vos recibís</span>
+                                        <span className="text-green-700">${proReceives.toLocaleString('es-AR')}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         <div className="space-y-1.5">
                             <Label htmlFor="q-hours">Horas estimadas <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                             <Input
@@ -398,7 +514,7 @@ export function ChatWindow({ jobId, jobStatus, requestType, otherUser, currentUs
                                 Cancelar
                             </Button>
                             <Button type="submit" disabled={isSendingQuote} className="flex-1">
-                                {isSendingQuote ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar oferta"}
+                                {isSendingQuote ? <Loader2 className="w-4 h-4 animate-spin" /> : editingQuoteId ? "Actualizar" : "Enviar oferta"}
                             </Button>
                         </div>
                     </form>
