@@ -48,6 +48,7 @@ export default function ClientJobDetailPage() {
     const [job, setJob] = useState<Job | null>(null);
     const [proposalsCount, setProposalsCount] = useState(0);
     const [accepting, setAccepting] = useState(false);
+    const [initialMessage, setInitialMessage] = useState<string | null>(null);
 
     const jobId = params?.id ? String(params.id) : null;
 
@@ -82,6 +83,17 @@ export default function ClientJobDetailPage() {
                 .eq('job_id', id);
 
             setProposalsCount(count || 0);
+
+            // Fetch the first text message for context
+            const { data: firstMsg } = await supabase
+                .from('messages')
+                .select('content')
+                .eq('job_id', id)
+                .eq('message_type', 'text')
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .single();
+            if (firstMsg) setInitialMessage(firstMsg.content);
         } catch (error: any) {
             console.error("Error loading job:", error);
             if (error.code === 'PGRST116') {
@@ -339,6 +351,15 @@ export default function ClientJobDetailPage() {
                 <CardHeader><CardTitle>Descripción del trabajo</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-muted-foreground whitespace-pre-wrap">{job.description}</p>
+
+                    {/* Initial message from chat — only for direct (urgent) jobs */}
+                    {initialMessage && job.description !== initialMessage && (
+                        <div className="border-t pt-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Mensaje inicial</p>
+                            <p className="text-sm text-muted-foreground italic whitespace-pre-wrap">"{initialMessage}"</p>
+                        </div>
+                    )}
+
                     {job.work_photos && job.work_photos.length > 0 && (
                         <div>
                             <h3 className="font-medium mb-2">Fotos adjuntas</h3>

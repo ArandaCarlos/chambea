@@ -26,6 +26,36 @@ interface Conversation {
     unread_count: number;
 }
 
+function ConvRow({ conv }: { conv: Conversation }) {
+    return (
+        <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <span className="font-semibold text-primary">{conv.other_user.full_name[0]}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{conv.other_user.full_name}</h3>
+                    {conv.request_type === 'direct' && (
+                        <Badge variant="secondary" className="text-orange-600 bg-orange-50 border-orange-200 text-xs py-0">
+                            ⚡ Urgente
+                        </Badge>
+                    )}
+                    {conv.job_status === 'completed' && (
+                        <Badge variant="secondary" className="text-green-700 bg-green-50 border-green-200 text-xs py-0">✓ Completado</Badge>
+                    )}
+                </div>
+                {conv.job_title && (
+                    <p className="text-xs font-medium text-foreground/70 truncate">{conv.job_title}</p>
+                )}
+                <p className="text-sm text-muted-foreground truncate">{conv.last_message}</p>
+            </div>
+            <div className="text-xs text-muted-foreground shrink-0">
+                {new Date(conv.last_message_at).toLocaleDateString()}
+            </div>
+        </div>
+    );
+}
+
 function MessagesContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -34,10 +64,9 @@ function MessagesContent() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string>("");
+    const [tab, setTab] = useState<"active" | "completed">("active");
 
-    useEffect(() => {
-        loadConversations();
-    }, []);
+    useEffect(() => { loadConversations(); }, []);
 
     async function loadConversations() {
         try {
@@ -97,31 +126,10 @@ function MessagesContent() {
             const proIdParam = searchParams.get('proId') || searchParams.get('pro');
 
             if (jobIdParam && proIdParam) {
-                const existingKey = `${jobIdParam}-${proIdParam}`;
-                const existingConv = conversationMap.get(existingKey);
-
-                if (existingConv) {
-                    setSelectedConversation(existingConv);
-                } else {
-                    const [proUserRes, jobRes] = await Promise.all([
-                        supabase.from('profiles').select('id, full_name, avatar_url').eq('id', proIdParam).single(),
-                        supabase.from('jobs').select('title, status, request_type').eq('id', jobIdParam).single(),
-                    ]);
-
-                    if (proUserRes.data) {
-                        setSelectedConversation({
-                            id: 'new',
-                            job_id: jobIdParam,
-                            job_title: jobRes.data?.title,
-                            job_status: jobRes.data?.status,
-                            request_type: jobRes.data?.request_type,
-                            other_user: proUserRes.data,
-                            last_message: '',
-                            last_message_at: new Date().toISOString(),
-                            unread_count: 0,
-                        });
-                    }
-                }
+                const match = loadedConversations.find(
+                    c => c.job_id === jobIdParam && c.other_user.id === proIdParam
+                );
+                if (match) setSelectedConversation(match);
             }
         } catch (error) {
             console.error("Error loading conversations:", error);
@@ -138,6 +146,13 @@ function MessagesContent() {
         );
     }
 
+    const DONE = ["completed", "cancelled"];
+    const activeConvs = conversations.filter(c => !DONE.includes(c.job_status || ""));
+    const completedConvs = conversations.filter(c => DONE.includes(c.job_status || ""));
+    const filtered = tab === "active" ? activeConvs : completedConvs;
+    const urgent = filtered.filter(c => c.request_type === 'direct' && c.job_status === 'open');
+    const regular = filtered.filter(c => !(c.request_type === 'direct' && c.job_status === 'open'));
+
     return (
         <div className="space-y-6">
             <div>
@@ -152,9 +167,7 @@ function MessagesContent() {
                     <p className="text-sm text-muted-foreground mb-4">
                         Cuando contactes profesionales o publiques trabajos, las conversaciones aparecerán acá
                     </p>
-                    <Button asChild>
-                        <Link href="/client/search">Buscar profesionales</Link>
-                    </Button>
+                    <Button asChild><Link href="/client/search">Buscar profesionales</Link></Button>
                 </Card>
             ) : selectedConversation && currentUserId ? (
                 <div className="max-w-3xl mx-auto">
@@ -187,39 +200,59 @@ function MessagesContent() {
                     />
                 </div>
             ) : (
-                <div className="space-y-2">
-                    {conversations.map((conversation) => (
-                        <Card
-                            key={conversation.id}
-                            className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                            onClick={() => setSelectedConversation(conversation)}
+                <div className="space-y-4">
+                    {/* Tabs */}
+                    <div className="flex gap-2 border-b pb-2">
+                        <button
+                            onClick={() => setTab("active")}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${tab === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                         >
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                    <span className="font-semibold text-primary">
-                                        {conversation.other_user.full_name[0]}
-                                    </span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-semibold">{conversation.other_user.full_name}</h3>
-                                        {conversation.request_type === 'direct' && (
-                                            <Badge variant="secondary" className="text-orange-600 bg-orange-50 border-orange-200 text-xs py-0">
-                                                ⚡ Urgente
-                                            </Badge>
-                                        )}
+                            Activos {activeConvs.length > 0 && <span className="ml-1 opacity-70">({activeConvs.length})</span>}
+                        </button>
+                        <button
+                            onClick={() => setTab("completed")}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${tab === "completed" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            Completados {completedConvs.length > 0 && <span className="ml-1 opacity-70">({completedConvs.length})</span>}
+                        </button>
+                    </div>
+
+                    {filtered.length === 0 ? (
+                        <div className="text-center py-10 text-muted-foreground text-sm">
+                            {tab === "active" ? "No tenés conversaciones activas." : "Todavía no tenés trabajos completados."}
+                        </div>
+                    ) : (
+                        <>
+                            {urgent.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2 text-orange-600">
+                                        <Zap className="w-4 h-4" />
+                                        <span className="text-sm font-semibold">Urgentes — respondé rápido</span>
                                     </div>
-                                    {conversation.job_title && (
-                                        <p className="text-xs font-medium text-foreground/70 truncate">{conversation.job_title}</p>
-                                    )}
-                                    <p className="text-sm text-muted-foreground truncate">{conversation.last_message}</p>
+                                    <div className="space-y-2">
+                                        {urgent.map(conv => (
+                                            <Card key={conv.id} className="p-4 cursor-pointer hover:bg-orange-50 border-orange-200 transition-colors" onClick={() => setSelectedConversation(conv)}>
+                                                <ConvRow conv={conv} />
+                                            </Card>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground shrink-0">
-                                    {new Date(conversation.last_message_at).toLocaleDateString()}
+                            )}
+                            {regular.length > 0 && (
+                                <div className="space-y-2">
+                                    {regular.map(conv => (
+                                        <Card
+                                            key={conv.id}
+                                            className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${tab === "completed" ? "opacity-75" : ""}`}
+                                            onClick={() => setSelectedConversation(conv)}
+                                        >
+                                            <ConvRow conv={conv} />
+                                        </Card>
+                                    ))}
                                 </div>
-                            </div>
-                        </Card>
-                    ))}
+                            )}
+                        </>
+                    )}
                 </div>
             )}
         </div>
