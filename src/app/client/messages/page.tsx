@@ -183,7 +183,6 @@ function MessagesContent() {
                             id: selectedConversation.other_user.id,
                             full_name: selectedConversation.other_user.full_name,
                             avatar_url: selectedConversation.other_user.avatar_url || undefined,
-                            profilePath: `/profile/${selectedConversation.other_user.id}`,
                         }}
                     />
                 </div>
