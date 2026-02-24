@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Zap, MapPin, FileText } from "lucide-react";
+import { Loader2, Zap, MapPin, FileText, X } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 interface UrgentContactModalProps {
     open: boolean;
@@ -23,19 +24,86 @@ interface UrgentContactModalProps {
     professional: {
         id: string;
         full_name: string;
-        trade: string; // category_id
+        trade: string;
     };
+}
+
+interface AddressSuggestion {
+    label: string;    // display text
+    normalized: string; // value to save
+}
+
+async function fetchAddressSuggestions(query: string): Promise<AddressSuggestion[]> {
+    if (query.length < 5) return [];
+    try {
+        const url = `https://apis.datos.gob.ar/georef/api/direcciones?direccion=${encodeURIComponent(query)}&max=6`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.direcciones ?? []).map((d: any) => {
+            const street = d.calle?.nombre ?? "";
+            const number = d.altura?.valor ?? d.altura ?? "";
+            const locality = d.localidad_censal?.nombre ?? d.municipio?.nombre ?? "";
+            const province = d.provincia?.nombre ?? "";
+            const label = [
+                [street, number].filter(Boolean).join(" "),
+                [locality, province].filter(Boolean).join(", ")
+            ].filter(Boolean).join(", ");
+            return { label, normalized: label };
+        });
+    } catch {
+        return [];
+    }
 }
 
 export function UrgentContactModal({ open, onClose, professional }: UrgentContactModalProps) {
     const router = useRouter();
     const supabase = createClient();
     const [loading, setLoading] = useState(false);
-    const [form, setForm] = useState({
-        title: "",
-        description: "",
-        address: "",
-    });
+    const [form, setForm] = useState({ title: "", description: "", address: "" });
+
+    // Address autocomplete state
+    const [addressInput, setAddressInput] = useState("");
+    const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+    const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+
+    // Debounced address search
+    useEffect(() => {
+        if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+        if (addressInput.length < 5) { setAddressSuggestions([]); return; }
+        setIsLoadingAddress(true);
+        addressDebounceRef.current = setTimeout(async () => {
+            const results = await fetchAddressSuggestions(addressInput);
+            setAddressSuggestions(results);
+            setShowSuggestions(results.length > 0);
+            setIsLoadingAddress(false);
+        }, 350);
+    }, [addressInput]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
+
+    function handleSelectAddress(suggestion: AddressSuggestion) {
+        setAddressInput(suggestion.normalized);
+        setForm(f => ({ ...f, address: suggestion.normalized }));
+        setShowSuggestions(false);
+    }
+
+    function handleAddressInputChange(value: string) {
+        setAddressInput(value);
+        setForm(f => ({ ...f, address: value })); // keep form in sync even without selecting suggestion
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -43,7 +111,6 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
             toast.error("Completá el título y la dirección");
             return;
         }
-
         setLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -57,7 +124,6 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
 
             if (!clientProfile) throw new Error("No se encontró el perfil");
 
-            // Create the direct job — professional already assigned
             const { data: job, error } = await supabase
                 .from('jobs')
                 .insert({
@@ -76,7 +142,6 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
 
             if (error) throw error;
 
-            // Send opening message automatically
             await supabase.from('messages').insert({
                 job_id: job.id,
                 sender_id: clientProfile.id,
@@ -87,9 +152,7 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
 
             toast.success("¡Solicitud enviada! Abriendo chat...");
             onClose();
-            // Navigate to messages with the new job pre-selected
             router.push(`/client/messages?jobId=${job.id}&proId=${professional.id}`);
-
         } catch (error: any) {
             console.error(error);
             toast.error("Error al crear la solicitud. Intentá de nuevo.");
@@ -112,6 +175,7 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+                    {/* Title */}
                     <div className="space-y-1.5">
                         <Label htmlFor="urgent-title">¿Qué necesitás?</Label>
                         <div className="relative">
@@ -129,6 +193,7 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
                         </div>
                     </div>
 
+                    {/* Description */}
                     <div className="space-y-1.5">
                         <Label htmlFor="urgent-desc">Descripción breve <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                         <Textarea
@@ -143,20 +208,61 @@ export function UrgentContactModal({ open, onClose, professional }: UrgentContac
                         />
                     </div>
 
+                    {/* Address with Georef autocomplete */}
                     <div className="space-y-1.5">
                         <Label htmlFor="urgent-address">Dirección del trabajo</Label>
-                        <div className="relative">
-                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="urgent-address"
-                                className="pl-9"
-                                placeholder="Av. Corrientes 1234, CABA"
-                                value={form.address}
-                                onChange={e => setForm({ ...form, address: e.target.value })}
-                                disabled={loading}
-                                required
-                            />
+                        <div className="relative" ref={suggestionsRef}>
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+                                <Input
+                                    id="urgent-address"
+                                    className="pl-9 pr-8"
+                                    placeholder="Av. Corrientes 1234, CABA"
+                                    value={addressInput}
+                                    onChange={e => handleAddressInputChange(e.target.value)}
+                                    onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                                    disabled={loading}
+                                    autoComplete="off"
+                                    required
+                                />
+                                {isLoadingAddress && (
+                                    <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                                )}
+                                {addressInput && !isLoadingAddress && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setAddressInput(""); setForm(f => ({ ...f, address: "" })); setAddressSuggestions([]); }}
+                                        className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Suggestions dropdown */}
+                            {showSuggestions && addressSuggestions.length > 0 && (
+                                <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden">
+                                    {addressSuggestions.map((s, i) => (
+                                        <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => handleSelectAddress(s)}
+                                            className={cn(
+                                                "w-full text-left px-3 py-2.5 text-sm flex items-start gap-2 hover:bg-muted transition-colors",
+                                                i > 0 && "border-t"
+                                            )}
+                                        >
+                                            <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-orange-500" />
+                                            <span>{s.label}</span>
+                                        </button>
+                                    ))}
+                                    <div className="px-3 py-1.5 text-[10px] text-muted-foreground bg-muted/40 border-t">
+                                        Fuente: Georef API — datos.gob.ar
+                                    </div>
+                                </div>
+                            )}
                         </div>
+                        <p className="text-xs text-muted-foreground">Escribí al menos 5 caracteres para ver sugerencias normalizadas</p>
                     </div>
 
                     <div className="flex gap-3 pt-2">

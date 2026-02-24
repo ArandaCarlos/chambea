@@ -247,7 +247,12 @@ export function ChatWindow({ jobId, jobTitle, jobStatus, requestType, otherUser,
                             {otherUser.full_name}
                         </Link>
                         {jobTitle && (
-                            <p className="text-xs text-muted-foreground truncate">{jobTitle}</p>
+                            <Link
+                                href={isPro ? `/pro/jobs/${jobId}` : `/client/jobs/${jobId}`}
+                                className="text-xs text-muted-foreground truncate hover:underline hover:text-primary block"
+                            >
+                                {jobTitle}
+                            </Link>
                         )}
                     </div>
 
@@ -327,34 +332,34 @@ export function ChatWindow({ jobId, jobTitle, jobStatus, requestType, otherUser,
                             // ── System: accepted / rejected
                             if (isQuoteAccepted || isQuoteRejected) {
                                 return (
-                                    <div key={msg.id} className="flex justify-center">
+                                    <div key={msg.id} className="flex flex-col items-center gap-2 my-2">
                                         <div className={cn(
                                             "text-xs px-3 py-1.5 rounded-full",
                                             isQuoteAccepted ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
                                         )}>
                                             {msg.content}
                                         </div>
-                                    </div>
-                                );
-                            }
 
-                            // ── Job link card
-                            if (isJobLink && msg.metadata?.job_url) {
-                                // Adjust URL for professional (they see /pro/jobs/[id] instead of /client/jobs/[id])
-                                const jobUrl = isPro
-                                    ? msg.metadata.job_url.replace('/client/jobs/', '/pro/jobs/')
-                                    : msg.metadata.job_url;
-                                return (
-                                    <div key={msg.id} className="flex justify-center my-2">
-                                        <Card className="p-4 border-2 border-green-300 bg-green-50 rounded-xl max-w-xs w-full text-center space-y-2">
-                                            <p className="text-sm font-semibold text-green-800">✅ ¡Trabajo confirmado!</p>
-                                            <p className="text-xs text-muted-foreground">{msg.metadata.job_title || "Ver detalles del trabajo"}</p>
-                                            <Button asChild size="sm" className="bg-green-600 hover:bg-green-700 w-full">
-                                                <Link href={jobUrl}>
-                                                    <ExternalLink className="w-3 h-3 mr-1" /> Ver trabajo
-                                                </Link>
-                                            </Button>
-                                        </Card>
+                                        {/* Job link card — shown inline after acceptance, no DB insert needed */}
+                                        {isQuoteAccepted && (
+                                            <Card className="p-4 border-2 border-green-300 bg-green-50 rounded-xl max-w-sm w-full space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                                                        <ExternalLink className="w-4 h-4 text-white" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-green-800">¡Trabajo confirmado!</p>
+                                                        {jobTitle && <p className="text-xs text-muted-foreground">{jobTitle}</p>}
+                                                    </div>
+                                                </div>
+                                                <Button asChild size="sm" className="bg-green-600 hover:bg-green-700 w-full">
+                                                    <Link href={isPro ? `/pro/jobs/${jobId}` : `/client/jobs/${jobId}`}>
+                                                        <ExternalLink className="w-3 h-3 mr-2" />
+                                                        Ver seguimiento del trabajo
+                                                    </Link>
+                                                </Button>
+                                            </Card>
+                                        )}
                                     </div>
                                 );
                             }
