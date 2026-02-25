@@ -117,7 +117,7 @@ export default function ClientDashboard() {
                     Hola, {profile?.full_name || 'Usuario'}! 👋
                 </h1>
                 <p className="text-muted-foreground mt-2 max-w-xl">
-                    Publicá tu problema y recibí presupuestos de profesionales verificados en minutos.
+                    Encontrá al profesional ideal, chateá, acordá el precio y contratalo al instante.
                     Tu dinero está protegido hasta que el trabajo esté terminado.
                 </p>
                 <div className="flex items-center gap-2 mt-4">
@@ -168,7 +168,8 @@ export default function ClientDashboard() {
             )}
 
             {/* Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* POST-JOB HIDDEN: Card "Publicar un trabajo" removed for initial launch */}
+            <div className="grid grid-cols-1 gap-4">
                 <Card className="border-2 border-orange-200 bg-orange-50/50">
                     <CardContent className="p-6 flex flex-col gap-4">
                         <div className="flex items-start gap-4">
@@ -186,28 +187,6 @@ export default function ClientDashboard() {
                         <Button asChild className="bg-orange-500 hover:bg-orange-600 w-full">
                             <Link href="/client/search">
                                 <Search className="w-4 h-4 mr-2" /> Buscar profesional
-                            </Link>
-                        </Button>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-2 border-primary/20 bg-primary/5">
-                    <CardContent className="p-6 flex flex-col gap-4">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <FileText className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-base">Publicar un trabajo y recibir presupuestos</h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Describís lo que necesitás, los profesionales de la zona te mandan propuestas y elegís la mejor.
-                                </p>
-                                <p className="text-sm font-medium text-primary mt-1">Ideal para comparar precios y elegir con calma.</p>
-                            </div>
-                        </div>
-                        <Button asChild variant="outline" className="w-full">
-                            <Link href="/client/post-job">
-                                <Plus className="w-4 h-4 mr-2" /> Publicar trabajo
                             </Link>
                         </Button>
                     </CardContent>

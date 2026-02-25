@@ -117,12 +117,7 @@ export default function ClientJobsPage() {
                         Administrá tus solicitudes de trabajo
                     </p>
                 </div>
-                <Button asChild>
-                    <Link href="/client/post-job">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Publicar Trabajo
-                    </Link>
-                </Button>
+                {/* POST-JOB HIDDEN: Boton Publicar Trabajo removido */}
             </div>
 
             <Tabs defaultValue="open" className="w-full">
@@ -144,11 +139,7 @@ export default function ClientJobsPage() {
                             <p className="text-muted-foreground">
                                 No tenés trabajos abiertos
                             </p>
-                            <Button asChild className="mt-4">
-                                <Link href="/client/post-job">
-                                    Publicar tu primer trabajo
-                                </Link>
-                            </Button>
+                            {/* POST-JOB HIDDEN: Boton publicar primer trabajo removido */}
                         </div>
                     ) : (
                         openJobs.map((job) => (

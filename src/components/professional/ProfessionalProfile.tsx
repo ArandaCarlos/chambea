@@ -117,15 +117,13 @@ export function ProfessionalProfile({ profile, reviews = [] }: ProfessionalProfi
                     <div className="flex flex-col sm:flex-row gap-3 pt-2">
                         <Button
                             size="lg"
-                            className="flex-1 sm:flex-none bg-orange-500 hover:bg-orange-600"
+                            className="bg-orange-500 hover:bg-orange-600"
                             onClick={() => setShowContactModal(true)}
                         >
                             <Zap className="w-4 h-4 mr-2" />
                             Contactar ahora
                         </Button>
-                        <Button size="lg" variant="outline" className="flex-1 sm:flex-none" asChild>
-                            <Link href={`/client/post-job?pro=${profile.id}`}>Solicitar trabajo</Link>
-                        </Button>
+                        {/* POST-JOB HIDDEN: Boton "Solicitar trabajo" removido */}
                     </div>
 
                     {/* Urgent Contact Modal */}

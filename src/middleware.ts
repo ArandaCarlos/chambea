@@ -75,6 +75,12 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
+    // POST-JOB HIDDEN: Redirect /client/post-job to dashboard for initial launch
+    // Remove this block to re-enable the "publish job" flow in the future
+    if (request.nextUrl.pathname.startsWith('/client/post-job')) {
+        return NextResponse.redirect(new URL('/client/dashboard', request.url))
+    }
+
     // Role-based access control
     if (user && isProtectedPath) {
         const { data: profile } = await supabase

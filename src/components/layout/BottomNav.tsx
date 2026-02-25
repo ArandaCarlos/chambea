@@ -30,8 +30,9 @@ export function BottomNav() {
     } else if (isClient) {
         links = [
             { href: "/client/dashboard", label: "Inicio", icon: Home },
-            { href: "/client/post-job", label: "Publicar", icon: Briefcase },
-            { href: "/client/jobs", label: "Solicitudes", icon: MessageSquare }, // Reusing icon
+            { href: "/client/search", label: "Buscar", icon: Search },
+            // POST-JOB HIDDEN: { href: "/client/post-job", label: "Publicar", icon: Briefcase },
+            { href: "/client/jobs", label: "Solicitudes", icon: MessageSquare },
             { href: "/client/messages", label: "Mensajes", icon: MessageSquare },
             { href: "/profile", label: "Perfil", icon: User },
         ];

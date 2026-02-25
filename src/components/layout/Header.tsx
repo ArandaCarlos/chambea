@@ -123,12 +123,7 @@ export function Header() {
                             >
                                 Buscar Profesionales
                             </Link>
-                            <Link
-                                href="/client/post-job"
-                                className={cn("transition-colors hover:text-primary", pathname.includes("post-job") ? "text-primary" : "text-muted-foreground")}
-                            >
-                                Publicar Trabajo
-                            </Link>
+                            {/* POST-JOB HIDDEN: <Link href="/client/post-job">Publicar Trabajo</Link> */}
                             <Link
                                 href="/client/jobs"
                                 className={cn("transition-colors hover:text-primary", pathname.includes("jobs") ? "text-primary" : "text-muted-foreground")}
