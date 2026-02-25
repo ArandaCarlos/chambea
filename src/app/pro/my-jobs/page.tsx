@@ -165,9 +165,7 @@ function MyJobsContent() {
                             <p className="text-sm text-muted-foreground mb-4">
                                 Si te aceptaron una propuesta, aparecerá acá.
                             </p>
-                            <Button asChild>
-                                <Link href="/pro/browse-jobs">Buscar trabajos</Link>
-                            </Button>
+                            {/* BROWSE-JOBS HIDDEN: Boton "Buscar trabajos" removido */}
                         </div>
                     ) : (
                         activeJobs.map(job => (

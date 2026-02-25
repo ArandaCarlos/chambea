@@ -22,7 +22,7 @@ export function BottomNav() {
     if (isPro) {
         links = [
             { href: "/pro/dashboard", label: "Inicio", icon: Home },
-            { href: "/pro/browse-jobs", label: "Trabajos", icon: Search },
+            // BROWSE-JOBS HIDDEN: { href: "/pro/browse-jobs", label: "Trabajos", icon: Search },
             { href: "/pro/my-jobs", label: "Mis Trabajos", icon: Briefcase },
             { href: "/pro/messages", label: "Mensajes", icon: MessageSquare },
             { href: "/profile", label: "Perfil", icon: User },

@@ -159,21 +159,14 @@ export default function ProfessionalDashboard() {
     return (
         <div className="space-y-8">
             {/* Welcome & Status */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
-                        Hola, {profile?.full_name || 'Profesional'}! 👋
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Tu perfil está activo y visible para clientes cercanos.
-                    </p>
-                </div>
-                <Button asChild size="lg" className="w-full sm:w-auto">
-                    <Link href="/pro/browse-jobs">
-                        <Search className="mr-2 h-5 w-5" />
-                        Buscar Trabajos
-                    </Link>
-                </Button>
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">
+                    Hola, {profile?.full_name || 'Profesional'}! 👋
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                    Tu perfil está activo y visible para clientes cercanos.
+                </p>
+                {/* BROWSE-JOBS HIDDEN: Boton "Buscar Trabajos" removido para lanzamiento */}
             </div>
 
             {/* Urgent direct-request alert */}
@@ -258,40 +251,8 @@ export default function ProfessionalDashboard() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Nearby Jobs Feed */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-semibold">Oportunidades cerca tuyo</h2>
-                        <Button variant="link" asChild>
-                            <Link href="/pro/browse-jobs">Ver todas</Link>
-                        </Button>
-                    </div>
-
-                    <div className="space-y-4">
-                        {nearbyJobs.length === 0 ? (
-                            <Card className="p-12 text-center">
-                                <p className="text-muted-foreground mb-4">
-                                    No hay trabajos disponibles en este momento
-                                </p>
-                                <Button asChild>
-                                    <Link href="/pro/browse-jobs">
-                                        Buscar trabajos
-                                    </Link>
-                                </Button>
-                            </Card>
-                        ) : (
-                            nearbyJobs.map((job) => (
-                                <JobCard
-                                    key={job.id}
-                                    job={job as any}
-                                    showActions={true}
-                                />
-                            ))
-                        )}
-                    </div>
-                </div>
-
+            {/* BROWSE-JOBS HIDDEN: Sección "Oportunidades cerca tuyo" removida */}
+            <div className="grid grid-cols-1 gap-8">
                 {/* Quick Actions Sidebar */}
                 <div className="space-y-6">
                     <Card>

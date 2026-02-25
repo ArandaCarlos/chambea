@@ -88,9 +88,9 @@ export default function ProfessionalJobManagePage() {
     return (
         <div className="space-y-6 max-w-4xl">
             <Button variant="ghost" size="sm" asChild>
-                <Link href="/pro/browse-jobs">
+                <Link href="/pro/my-jobs">
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    Volver a trabajos
+                    Volver a mis trabajos
                 </Link>
             </Button>
 

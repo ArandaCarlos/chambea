@@ -48,7 +48,7 @@ export function Sidebar({ className, userType = "client" }: SidebarProps) {
     ];
 
     const professionalLinks = [
-        { href: "/pro/browse-jobs", label: "Trabajos Disponibles", icon: Search },
+        // BROWSE-JOBS HIDDEN: { href: "/pro/browse-jobs", label: "Trabajos Disponibles", icon: Search },
         { href: "/pro/my-jobs", label: "Mis Trabajos", icon: Briefcase },
         { href: "/pro/earnings", label: "Ganancias", icon: CreditCard },
         { href: "/pro/reviews", label: "Mis Reseñas", icon: Star },

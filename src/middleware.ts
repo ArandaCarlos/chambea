@@ -81,6 +81,12 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/client/dashboard', request.url))
     }
 
+    // BROWSE-JOBS HIDDEN: Redirect /pro/browse-jobs to dashboard for initial launch
+    // Remove this block to re-enable the "browse jobs" flow in the future
+    if (request.nextUrl.pathname.startsWith('/pro/browse-jobs')) {
+        return NextResponse.redirect(new URL('/pro/dashboard', request.url))
+    }
+
     // Role-based access control
     if (user && isProtectedPath) {
         const { data: profile } = await supabase

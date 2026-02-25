@@ -152,9 +152,7 @@ export default function ProfessionalMessagesPage() {
                     <p className="text-sm text-muted-foreground mb-4">
                         Cuando un cliente te contacte o acepten tu propuesta, las conversaciones aparecerán acá.
                     </p>
-                    <Button asChild>
-                        <Link href="/pro/browse-jobs">Ver trabajos disponibles</Link>
-                    </Button>
+                    {/* BROWSE-JOBS HIDDEN: Boton "Ver trabajos disponibles" removido */}
                 </Card>
             ) : selectedConversation && currentUserId ? (
                 <div className="max-w-3xl mx-auto">

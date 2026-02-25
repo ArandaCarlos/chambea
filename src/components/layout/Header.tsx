@@ -99,12 +99,7 @@ export function Header() {
                     {/* Pro Links */}
                     {pathname.startsWith("/pro") && (
                         <>
-                            <Link
-                                href="/pro/browse-jobs"
-                                className={cn("transition-colors hover:text-primary", pathname.includes("browse") ? "text-primary" : "text-muted-foreground")}
-                            >
-                                Buscar Trabajos
-                            </Link>
+                            {/* BROWSE-JOBS HIDDEN: <Link href="/pro/browse-jobs">Buscar Trabajos</Link> */}
                             <Link
                                 href="/pro/my-jobs"
                                 className={cn("transition-colors hover:text-primary", pathname.includes("my-jobs") ? "text-primary" : "text-muted-foreground")}
